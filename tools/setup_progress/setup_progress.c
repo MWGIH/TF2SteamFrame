@@ -145,7 +145,8 @@ int wmain(int argc, wchar_t **argv)
     GetExitCodeProcess(pi.hProcess, &code);
     if (code == 0) {
         if (last != 1000) draw(1, last_total, last_total);
-        say("\r\n\r\n  Done. Starting Titanfall 2 VR...\r\n");
+        say("\r\n\r\n  Done. Starting the EA app and Titanfall 2 VR, this can take a few minutes...\r\n");
+        Sleep(4000);   /* the window closes when this returns; leave 100% on screen for a moment */
     } else {
         snprintf(buf, sizeof buf, "\r\n\r\n  Building the game files failed (exit code %lu).\r\n", code);
         say(buf);
