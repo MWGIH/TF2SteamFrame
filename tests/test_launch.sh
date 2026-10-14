@@ -120,9 +120,23 @@ ok "the mode file set to flat starts the normal game"
 rm "$HOME/.config/tf2vr-frame/mode"
 : > "$CALLS"
 
-# --- 5. a command line without proton is passed through untouched ------------------------------
+# --- 5. Steam starting the game through the EA app link (as on the Steam Frame) ------------------
+url='steam2ea://launchgame/1237970?platform=steam&theme=tf2'
+link_cmd=("${steam_cmd[@]:0:${#steam_cmd[@]}-1}" "$url")
+STEAM_COMPAT_INSTALL_PATH="$GAME" "$L" "${link_cmd[@]}" || fail "EA-link launch exits 0"
+grep -q crash_monitor "$CALLS" || fail "EA-link launch starts VR"
+grep -q steam2ea "$CALLS" && fail "the EA link is not run in VR mode"
+ok "a steam2ea:// launch goes to VR, using the game folder from Proton's environment"
+: > "$CALLS"
+STEAM_COMPAT_INSTALL_PATH="$GAME" "$L" "${link_cmd[@]}" -flat
+grep -q "|steam2ea://" "$CALLS" || fail "flat EA-link launch runs the link unchanged"
+grep -q -- "-flat" "$CALLS" && fail "-flat is not passed on an EA-link launch"
+ok "-flat on a steam2ea:// launch runs Steam's command unchanged"
+: > "$CALLS"
+
+# --- 6. a command line without proton is passed through untouched ------------------------------
 "$L" /bin/true something-else || fail "unknown command lines run unchanged"
-grep -q "isn't in Steam's command line" "$LOG" || fail "unknown command line is logged"
+grep -q "nor the EA app link is in Steam's command line" "$LOG" || fail "unknown command line is logged"
 ok "a command line without Titanfall2.exe runs unchanged"
 
 echo "$pass checks passed"
