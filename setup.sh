@@ -8,7 +8,7 @@
 # Options for install.sh go after `bash -s --`, e.g.  ... | bash -s -- --beta
 set -euo pipefail
 
-REPO="https://github.com/MWGIH/TF2SteamFrame"
+REPO=${TF2SF_REPO:-https://github.com/MWGIH/TF2SteamFrame}
 BRANCH=${TF2SF_BRANCH:-main}
 DIR=${TF2SF_DIR:-$HOME/TF2SteamFrame}
 
@@ -24,7 +24,7 @@ if command -v git >/dev/null 2>&1; then
     exit 1
   else
     rm -rf "$DIR"
-    git clone -q --branch "$BRANCH" "$REPO.git" "$DIR"
+    git clone -q --branch "$BRANCH" "$REPO" "$DIR"
   fi
 else
   if [ -e "$DIR" ] && [ ! -f "$DIR/install.sh" ]; then
