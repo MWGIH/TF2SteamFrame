@@ -499,6 +499,38 @@ PY2
   echo "launch-options.log:"; tail -n 20 "$LOG_DIR/launch-options.log" 2>/dev/null || echo "  (none)"
   echo "journal for the service (this boot):"
   journalctl --user -b -u "$UNIT_NAME" --no-pager 2>/dev/null | tail -n 20
+
+  echo
+  echo "== launching"
+  echo "mode file: $(cat "$CONF_DIR/mode" 2>/dev/null || echo none)   setup pending: $([ -f "$STATE/setup-pending" ] && echo yes || echo no)"
+  echo "launcher: $(ls -l "$LAUNCHER" 2>&1)"
+  echo "installed mod version: $(cat "$STATE/stage/version" 2>/dev/null || echo unknown)"
+  echo "prefix: ${PREFIX:-not found}"
+  if [ -n "${GAME:-}" ]; then
+    echo "mod files in the game folder:"
+    local f
+    for f in Titanfall2VRLauncher.exe TF2VR/Northstar.dll TF2VR/plugins/Titanfall2VR.dll \
+             TF2VR/tools/crash_monitor.exe TF2VR/tools/launch.json; do
+      echo "  $f: $(stat -c '%s bytes, %y' "$GAME/$f" 2>/dev/null || echo MISSING)"
+    done
+    for f in "$GAME"/{,bin/x64_retail/}{dxgi,d3d11}.dll; do [ -f "$f" ] && echo "  extra DirectX file: $f"; done
+    echo "launch.json:"; head -c 1500 "$GAME/TF2VR/tools/launch.json" 2>/dev/null; echo
+  fi
+  echo "launch.log (last 80 lines):"; tail -n 80 "$LOG_DIR/launch.log" 2>/dev/null || echo "  (none - Steam never ran the launcher)"
+  echo "asset_patcher.log (last 15 lines):"; tail -n 15 "$LOG_DIR/asset_patcher.log" 2>/dev/null || echo "  (none)"
+  if [ -n "${GAME:-}" ]; then
+    local newest
+    echo "engine.txt (last 60 lines):"
+    tail -n 60 "$GAME/TF2VR/plugins/Titanfall2VR-data/engine.txt" 2>/dev/null || echo "  (none)"
+    newest=$(ls -1t "$GAME"/TF2VR/logs/nslog*.txt 2>/dev/null | head -n 1)
+    echo "newest Northstar log: ${newest:-(none)}"
+    [ -n "$newest" ] && tail -n 60 "$newest"
+    newest=$(ls -1td "$GAME"/TF2VR/crashes/*/ 2>/dev/null | head -n 1)
+    echo "newest crash folder: ${newest:-(none)}"
+    [ -n "$newest" ] && tail -n 20 "$newest/monitor.txt" 2>/dev/null
+  fi
+  echo "VR environment Steam gave the game (last launch):"
+  grep 'VR environment:' "$LOG_DIR/launch.log" 2>/dev/null | tail -n 1
 }
 
 if [ "$MODE" = diagnose ]; then
