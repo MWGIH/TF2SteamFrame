@@ -8,6 +8,8 @@ The official installer only runs on Windows, and [tf2vr-linux](https://github.co
 - Everything is downloaded from the official release links and checked against the official checksums. This repo contains no game or mod files.
 - No path is hardcoded. Steam and the game are found from Steam's `libraryfolders.vdf`, so the game can be on internal storage, a microSD card or an external drive. At launch, every path comes from the command line Steam itself builds.
 
+> Made with AI assistance and a human in the loop; see [AI disclosure](#ai-disclosure).
+>
 > **Status: untested on real Steam Frame hardware.** The scripts are tested against a simulated Steam launch (see [Tests](#tests)), and the audio fix is checked against the current mod release (1.0.17). Whether the Frame's standalone mode runs Proton VR games well enough for Titanfall 2 is the open question; see [What isn't known yet](#what-isnt-known-yet). Reports welcome.
 
 ## Based on
@@ -171,6 +173,12 @@ The same approach also works on x86 SteamOS (Steam Deck) and desktop Linux with 
 python3 -m unittest discover -s tests   # Steam library discovery and the Titanfall2VR.dll patch
 bash tests/test_launch.sh               # the launch wrapper against a simulated Steam command and Proton
 ```
+
+## AI disclosure
+
+This repo was written with the help of AI (Anthropic's Claude), with a human in the loop. Martin ([MWGIH](https://github.com/MWGIH)) set the goals, directed the work and reviews every change before it's merged. The AI investigated the original projects, wrote the scripts, tests and documentation, and checked the audio fix against the mod's binary.
+
+It hasn't been tested on Steam Frame hardware yet (see [What isn't known yet](#what-isnt-known-yet)), so please report anything that doesn't work. The mod itself, Northstar and the projects in [Based on](#based-on) are their authors' own work.
 
 ## Credits
 
