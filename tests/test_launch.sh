@@ -7,7 +7,7 @@ set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 T=$(mktemp -d)
-trap 'pkill -f "$T/" 2>/dev/null || true; rm -rf "$T"' EXIT
+trap 'pkill -f "$T/" 2>/dev/null; pkill -f "^C:.Program Files.Electronic Arts" 2>/dev/null; rm -rf "$T"' EXIT
 
 export HOME="$T/home" XDG_DATA_HOME="" XDG_CONFIG_HOME="" XDG_STATE_HOME="" XDG_CACHE_HOME=""
 unset XDG_DATA_HOME XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME
