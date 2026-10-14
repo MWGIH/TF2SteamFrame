@@ -10,30 +10,85 @@ The official installer only runs on Windows, and [tf2vr-linux](https://github.co
 
 > **Status: untested on real Steam Frame hardware.** The scripts are tested against a simulated Steam launch (see [Tests](#tests)), and the audio fix is checked against the current mod release (1.0.17). Whether the Frame's standalone mode runs Proton VR games well enough for Titanfall 2 is the open question; see [What isn't known yet](#what-isnt-known-yet). Reports welcome.
 
+## Based on
+
+This repo adapts two existing projects for the Steam Frame. All credit for the mod and the Linux groundwork goes to their authors:
+
+| Project | What it is | What this repo uses from it |
+|---|---|---|
+| [CircuitLord/CircuitLordVRModInstaller](https://github.com/CircuitLord/CircuitLordVRModInstaller) by [CircuitLord](https://github.com/CircuitLord) | The Titanfall 2 VR mod and its official Windows installer (MIT) | The mod itself, its release manifest and checksums, the Northstar version it pins, and the file layout and launch arguments its Play button uses |
+| [Monkellie/tf2vr-linux](https://github.com/Monkellie/tf2vr-linux) by [Monkellie](https://github.com/Monkellie) | Runs the mod on x86_64 Linux PCs through Proton (MIT) | The install steps, the EA app handling and the VC++ runtime handling, reworked to run through Steam on the Frame |
+| [polar421/Titanfall-2-VR-linux-fix](https://github.com/polar421/Titanfall-2-VR-linux-fix) by [polar421](https://github.com/polar421) | The first working Proton setup for the mod | The audio fix (sending the mod's loopback capture to the default playback device), applied here to the mod's DLL instead of to Proton |
+| [R2Northstar/Northstar](https://github.com/R2Northstar/Northstar) | The Titanfall 2 mod loader the VR mod runs on | Downloaded at the version CircuitLord's installer pins |
+
 ## What you need
 
-- **A Steam Frame** (or any SteamOS / Linux device with Steam: ARM64 or x86_64)
-- **Titanfall 2 on Steam**, installed on the Frame, and **started once the normal way**: sign in to the EA app, wait for the main menu, then quit. That creates the game's Wine prefix and installs the EA app in it.
-- A terminal on the Frame: desktop mode's Konsole, or SSH
-- About 1 GB of free space for the download and the staged files (removed after the first launch)
+- **A Steam Frame** (or any SteamOS / Linux device with Steam, ARM64 or x86_64)
+- **Titanfall 2 from Steam, installed on the Frame.** Internal storage, a microSD card or an external drive all work.
+- **A terminal on the Frame**: the desktop mode terminal (Konsole), or SSH from another computer
+- **An internet connection** and about 1 GB of free space for the download and staged files (the staged files are removed after the first launch)
 
-## Install
+The installer uses `git`, `curl`, `python3`, `sha256sum` and `bsdtar`, which SteamOS already includes. Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder.
 
-1. **Run the installer on the Frame:**
-   ```sh
-   git clone https://github.com/MWGIH/TF2SteamFrame.git
-   cd TF2SteamFrame
-   ./install.sh
-   ```
-   It checks your setup first and says what's missing, if anything.
-2. **Set Titanfall 2's launch options in Steam.** Titanfall 2 → Properties → General → Launch options, and paste the line `install.sh` printed. It looks like this, with your own home folder:
-   ```
-   /home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
-   ```
-   It's also saved in `~/.local/share/tf2vr-frame/launch-options.txt` to copy from.
-3. **Press Play.** The first launch builds the mod's game assets first, which takes a few minutes before the EA app and the game appear. Later launches go straight into VR.
+## Install on the Steam Frame
 
-Leave Titanfall 2's Compatibility setting on whatever Proton Steam picks. Unlike tf2vr-linux, no custom Proton is needed.
+### 1. Start Titanfall 2 once the normal way
+
+In Steam, install Titanfall 2 and press **Play**, with no launch options set. The EA app installs itself the first time. Sign in to it, wait for Titanfall 2's main menu, then quit the game.
+
+This creates the game's Wine prefix (the Windows-style folder Proton keeps for the game) and signs the EA app in. The VR launch reuses both.
+
+### 2. Open a terminal on the Frame
+
+Use one of these:
+- **Desktop mode:** switch to desktop mode from the power menu (as on the Steam Deck), then open **Konsole** from the application launcher.
+- **SSH from another computer:** in desktop mode, set a password with `passwd` and start SSH with `sudo systemctl enable --now sshd`. Then connect from your computer with `ssh <user>@<frame-ip>` (`whoami` and `ip addr` on the Frame show both).
+
+### 3. Download this repo and run the installer
+
+```sh
+cd ~
+git clone https://github.com/MWGIH/TF2SteamFrame.git
+cd TF2SteamFrame
+./install.sh
+```
+
+Without git, download it with curl instead:
+```sh
+cd ~
+curl -L https://github.com/MWGIH/TF2SteamFrame/archive/refs/heads/main.tar.gz | tar xz
+cd TF2SteamFrame-main
+./install.sh
+```
+
+The installer:
+1. finds Steam and every Steam library from `libraryfolders.vdf`, then finds Titanfall 2 and its Wine prefix in them,
+2. checks everything it needs and stops with a clear message if something is missing,
+3. copies Microsoft's current VC++ runtime into the game's prefix,
+4. downloads the mod and Northstar from their official release links and checks their checksums,
+5. applies the audio fix to the mod's DLL and stages the files, without changing the game folder yet,
+6. installs the launch wrapper in `~/.local/share/tf2vr-frame` and prints the launch options to use.
+
+To only see what it would check, without changing anything, run `./install.sh --check`. If the game isn't found, point at it with `./install.sh --game /path/to/Titanfall2`.
+
+### 4. Set Titanfall 2's launch options
+
+In Steam (game mode or desktop mode): Titanfall 2 → **Properties** → **General** → **Launch options**. Paste the line `install.sh` printed at the end. It looks like this, with your own home folder:
+```
+/home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
+```
+
+The line is also saved in `~/.local/share/tf2vr-frame/launch-options.txt`. In desktop mode you can open that file and copy it, which is easier than typing it on the headset's keyboard.
+
+Leave Titanfall 2's **Compatibility** setting on whatever Proton Steam picks. No custom Proton is needed.
+
+### 5. Press Play
+
+Put the headset on and press **Play** on Titanfall 2.
+
+The **first launch** after installing or updating builds the mod's game assets from your game files before anything appears, which takes a few minutes. Once they're built and checked, the mod is copied into the game folder and the game starts in VR. Later launches go straight to the EA app and the game.
+
+If something goes wrong, everything is logged to `~/.local/state/tf2vr-frame/launch.log`. See [If something goes wrong](#if-something-goes-wrong).
 
 ## Play
 
@@ -137,12 +192,12 @@ bash tests/test_launch.sh               # the launch wrapper against a simulated
 
 ## Credits
 
-- **[CircuitLord](https://github.com/CircuitLord/CircuitLordVRModInstaller)** for the Titanfall 2 VR mod and its installer (MIT).
-- **[Monkellie's tf2vr-linux](https://github.com/Monkellie/tf2vr-linux)** (MIT), which this repo is based on: the install steps, the EA app handling and the VC++ runtime handling come from it. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-- **[polar421](https://github.com/polar421/Titanfall-2-VR-linux-fix)** for getting the mod running on Proton first, and for finding the audio fix.
-- **[Northstar](https://github.com/R2Northstar/Northstar)**, the mod loader the VR mod runs on.
+- **[CircuitLord](https://github.com/CircuitLord)** made the [Titanfall 2 VR mod and its installer](https://github.com/CircuitLord/CircuitLordVRModInstaller). For help with the mod itself, use [CircuitLord's Discord](https://discord.gg/MTKwud2cCP).
+- **[Monkellie](https://github.com/Monkellie)** made [tf2vr-linux](https://github.com/Monkellie/tf2vr-linux), which this repo is based on. Its MIT notice is kept in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- **[polar421](https://github.com/polar421)** got the mod [running on Proton first](https://github.com/polar421/Titanfall-2-VR-linux-fix) and found the audio fix.
+- **[Northstar](https://github.com/R2Northstar/Northstar)** is the mod loader the VR mod runs on.
 
-This is a community project. It isn't affiliated with or endorsed by Respawn, EA, Valve or CircuitLord.
+See [Based on](#based-on) for what this repo takes from each. This is a community project. It isn't affiliated with or endorsed by Respawn, EA, Valve, CircuitLord or the authors above.
 
 ## License
 
