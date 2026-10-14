@@ -32,7 +32,9 @@ STEAM_OFFER="Origin.OFR.50.0001456"
 
 mkdir -p "$LOG_DIR"
 
-log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+# The launcher's own lines go to launch.log; everything Steam, Proton and the game print goes to
+# output.log, so launch.log stays readable.
+log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*" >> "$LOG_DIR/launch.log"; }
 die() {
   log "ERROR: $1"
   command -v notify-send >/dev/null 2>&1 && notify-send -a "Titanfall 2 VR" -i dialog-error "Titanfall 2 VR" "$1" 2>/dev/null
@@ -312,14 +314,16 @@ inner_vr() {
   log "Game exited with code ${rc:-unknown}"
   end_session
   wait "$proton_pid" 2>/dev/null
-  [ "${rc:-0}" = 0 ] || die "Titanfall 2 VR exited with code $rc - see $LOG_DIR/launch.log, ${session:-$G/TF2VR/crashes} and $G/TF2VR/logs"
+  [ "${rc:-0}" = 0 ] || die "Titanfall 2 VR exited with code $rc - see $LOG_DIR/launch.log, $LOG_DIR/output.log, ${session:-$G/TF2VR/crashes} and $G/TF2VR/logs"
   return 0
 }
 
 # ====================================================================== outer ==
 # Runs where Steam runs launch options, with Steam's full command line as arguments.
 outer() {
-  exec >> "$LOG_DIR/launch.log" 2>&1
+  # Start output.log afresh once it gets big
+  [ "$(stat -c %s "$LOG_DIR/output.log" 2>/dev/null || echo 0)" -lt 5000000 ] || : > "$LOG_DIR/output.log"
+  exec >> "$LOG_DIR/output.log" 2>&1
   log "---- Steam launch: $*"
 
   local -a cmd=("$@") tail_args=()
@@ -402,7 +406,7 @@ outer() {
   if [ -f "$STATE/setup-pending" ]; then
     log "Setting up the mod (first VR launch)..."
     "${pre[@]}" "$SELF" --inner setup "${#runner[@]}" "${runner[@]}" "$exe"
-    if ! "$STATE/install.sh" --finish --game "$(dirname "$exe")"; then
+    if ! "$STATE/install.sh" --finish --game "$(dirname "$exe")" >> "$LOG_DIR/launch.log" 2>&1; then
       die "Setting up the mod failed - see $LOG_DIR/launch.log. Run install.sh again, then launch again."
     fi
   fi
@@ -412,7 +416,7 @@ outer() {
 
 if [ "${1:-}" = --inner ]; then
   shift
-  exec >> "$LOG_DIR/launch.log" 2>&1
+  exec >> "$LOG_DIR/output.log" 2>&1
   os_name=$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"')
   log "inner ($1) running in: $(uname -m), ${os_name:-unknown OS}"
   inner "$@"

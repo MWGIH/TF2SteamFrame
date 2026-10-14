@@ -110,7 +110,7 @@ First, collect a diagnostics report. Quit Titanfall 2, open Konsole, and paste:
 
 It prints the launch options Steam has saved, the restart job's log, which mod files are in place, and the end of every log from the last launch (launcher, asset builder, VR plugin, Northstar, crash monitor). The same report is saved to `~/tf2vr-frame-diagnostics.txt`; attach that file when asking for help or opening an issue.
 
-The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
+The launcher writes what it does to `~/.local/state/tf2vr-frame/launch.log`, and everything Steam, Proton and the game print to `output.log` in the same folder.
 
 | What you see | What to do |
 |---|---|
@@ -128,7 +128,7 @@ The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 | `Another mod replaced DirectX files` | Remove `dxgi.dll` and `d3d11.dll` (ReShade and similar) from the game folder. |
 
 Logs worth attaching to an issue, collected after the game has closed:
-- `~/.local/state/tf2vr-frame/launch.log`
+- `~/.local/state/tf2vr-frame/launch.log` and `output.log`
 - `Titanfall2/TF2VR/plugins/Titanfall2VR-data/engine.txt`
 - the newest `Titanfall2/TF2VR/logs/nslog*.txt`
 - the newest folder in `Titanfall2/TF2VR/crashes/`

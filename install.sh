@@ -519,8 +519,9 @@ PY2
   fi
   if [ -f "$LOG_DIR/launch.log" ]; then
     # The game's own output goes to the same log; the launcher's lines start with [HH:MM:SS]
-    echo "launcher lines in launch.log (last 40):"; grep -E '^\[[0-9:]+\]' "$LOG_DIR/launch.log" | tail -n 40 | cut -c1-2000
-    echo "launch.log (last 30 lines):"; tail -n 30 "$LOG_DIR/launch.log"
+    echo "launch.log (last 60 lines):"; grep -vE 'LD_PRELOAD cannot be preloaded' "$LOG_DIR/launch.log" | tail -n 60 | cut -c1-2000
+    echo "output.log, Steam/Proton/game output (last 40 lines, without the overlay noise):"
+    grep -vE 'LD_PRELOAD cannot be preloaded|^ATTENTION: default value' "$LOG_DIR/output.log" 2>/dev/null | tail -n 40 | cut -c1-500
   else
     echo "launch.log: (none - Steam never ran the launcher)"
   fi
@@ -613,6 +614,6 @@ EOF
   cat <<EOF
 The first launch builds the mod's game assets before the game appears, which takes a few minutes.
 For the normal game without VR: echo flat > $CONF_DIR/mode    (echo vr > ... to switch back)
-Logs: $LOG_DIR/launch.log
+Logs: $LOG_DIR/launch.log (Steam, Proton and game output: $LOG_DIR/output.log)
 EOF
 fi
