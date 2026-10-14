@@ -127,6 +127,14 @@ preflight() {
   fi
   if [ -f "$STATE/version" ]; then ok "Installed: $(cat "$STATE/version")"; else ok "Mod not installed yet"; fi
   if [ -f "$STATE/setup-pending" ]; then ok "Waiting for the first launch from Steam to finish setup"; fi
+  # The first launch builds about 3 GB of game assets in ~/.local/share, then moves them into the game folder
+  local free_kb
+  free_kb=$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }')
+  if [ -n "$free_kb" ] && [ "$free_kb" -lt 4194304 ]; then
+    fail "only $((free_kb / 1048576)) GB free in your home folder - the first launch needs about 4 GB. Free some space (uninstall a game, or clear Steam's shader cache) and run this again"
+  elif [ -n "$free_kb" ]; then
+    ok "free space: $((free_kb / 1048576)) GB"
+  fi
 }
 
 # --------------------------------------------------- VC++ runtime (prefix) --
@@ -389,9 +397,13 @@ clear_launch_options() {
 
 # --------------------------------------------------------------- finish --
 # place <source file> <path relative to the game folder>
+# Files are moved out of the stage, not copied: the stage is deleted afterwards anyway, and a copy
+# needs as much free space again as the assets take (about 3 GB).
 place() {
-  mkdir -p "$(dirname "$GAME/$2")"
-  cp -f "$1" "$GAME/$2"
+  mkdir -p "$(dirname "$GAME/$2")" \
+    && rm -f "$GAME/$2" \
+    && mv -f "$1" "$GAME/$2" \
+    || die "couldn't put $2 into $GAME. Free space: $(df -h --output=avail "$GAME" 2>/dev/null | tail -n 1 | tr -d ' ')"
   printf '%s\n' "$2" >> "$FILES"
 }
 place_tree() {
@@ -406,6 +418,8 @@ finish() {
   local stage="$STATE/stage" f
   [ -n "$GAME" ] && [ -f "$GAME/Titanfall2.exe" ] || die "no Titanfall 2 folder given"
   [ -f "$stage/version" ] || die "nothing staged - run install.sh again"
+  # Anything else that goes wrong below is reported with the command that failed
+  trap 'printf "\nERROR: install step failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
   helper verify-assets "$stage/mod/patches/manifest.json" "$stage/assets" \
     || { tail -n 20 "$LOG_DIR/asset_patcher.log" 2>/dev/null >&2; die "asset_patcher.exe didn't build the game assets (see $LOG_DIR/asset_patcher.log)"; }
   ok "game assets built and verified"
@@ -474,6 +488,7 @@ diagnose() {
   local cfg
   echo "== tf2vr-frame diagnostics $(date '+%F %T')"
   echo "arch: $(uname -m)  os: $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null)"
+  echo "free space: home $(df -h --output=avail "$HOME" 2>/dev/null | tail -n 1 | tr -d ' ')   game folder $(df -h --output=avail "${GAME:-$HOME}" 2>/dev/null | tail -n 1 | tr -d ' ')"
   echo "steam root: ${STEAM:-not found}   game: ${GAME:-not found}"
   echo "steam processes:"; pgrep -a -x steam 2>/dev/null | cut -c1-200; pgrep -c steamwebhelper 2>/dev/null | sed 's/^/  steamwebhelper count: /'
   echo "localconfig.vdf files and Titanfall 2 launch options:"
