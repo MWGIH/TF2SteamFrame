@@ -7,6 +7,12 @@
 #   ./install.sh --beta        use the mod's beta channel instead of the stable release
 #   ./install.sh --uninstall   remove the mod files and the wrapper (campaign saves are kept)
 #   ./install.sh --game DIR    the folder with Titanfall2.exe, if it isn't found automatically
+#   ./install.sh --yes         close and reopen Steam without asking, to set the launch options
+#   ./install.sh --no-launch-options   don't touch Steam's launch options; set them by hand
+#
+# At the end it sets Titanfall 2's Steam launch options to start the VR launcher. Steam only
+# reads them at start and rewrites them on exit, so if Steam is running it asks to close Steam for
+# a moment, and starts it again afterwards.
 #
 # Run it on the Frame itself (desktop mode terminal, or over SSH). It works on any Steam Linux
 # device, ARM64 or x86_64, because it never runs Windows programs itself: the one step that needs
@@ -36,6 +42,8 @@ MODE=install
 FORCE=0
 CHANNEL=stable
 OPT_GAME=""
+YES=0
+LAUNCH_OPTIONS=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --check)     MODE=check ;;
@@ -43,6 +51,8 @@ while [ $# -gt 0 ]; do
     --finish)    MODE=finish ;;
     --force)     FORCE=1 ;;
     --beta)      CHANNEL=beta ;;
+    --yes|-y)    YES=1 ;;
+    --no-launch-options) LAUNCH_OPTIONS=0 ;;
     --game)
       [ $# -ge 2 ] && [ -d "$2" ] || { echo "install.sh: --game needs the folder with Titanfall2.exe" >&2; exit 2; }
       OPT_GAME=$(readlink -f "$2")
@@ -263,6 +273,71 @@ install_launcher() {
   ok "$LAUNCHER"
 }
 
+# ------------------------------------------------------- launch options --
+steam_running() { pgrep -x steam >/dev/null 2>&1; }
+
+# with_steam_closed <what for> <command...>: run a command that edits Steam's config while Steam
+# is closed. Asks first, closes Steam, runs it, and starts Steam again. Returns 1 if not done.
+with_steam_closed() {
+  local why=$1 answer restart=0
+  shift
+  if steam_running; then
+    if [ "$YES" = 0 ]; then
+      if ! { : < /dev/tty; } 2>/dev/null; then
+        warn "Steam is running, so it can't be closed to $why without asking (run again with --yes)"
+        return 1
+      fi
+      printf '  Steam has to close for a moment to %s. Close Steam now? [Y/n] ' "$why"
+      read -r answer < /dev/tty || answer=n
+      case "$answer" in ''|[Yy]*) ;; *) return 1 ;; esac
+    fi
+    echo "  closing Steam..."
+    steam -shutdown >/dev/null 2>&1 &
+    for _ in $(seq 1 60); do steam_running || break; sleep 1; done
+    if steam_running; then
+      warn "Steam didn't close"
+      return 1
+    fi
+    restart=1
+  fi
+  local rc=0
+  "$@" || rc=$?
+  if [ "$restart" = 1 ]; then
+    echo "  starting Steam again..."
+    setsid steam >/dev/null 2>&1 < /dev/null &
+  fi
+  return $rc
+}
+
+write_launch_options() {
+  local changed
+  changed=$(helper set-launch-options "$STEAM" "$LAUNCHER") || return 1
+  if [ -n "$changed" ]; then ok "launch options set ($(wc -l <<<"$changed") Steam account(s))"
+  else ok "launch options already set"
+  fi
+}
+
+LAUNCH_OPTIONS_SET=0
+set_launch_options() {
+  echo
+  echo "Steam launch options:"
+  [ "$LAUNCH_OPTIONS" = 1 ] || { ok "left alone (--no-launch-options)"; return; }
+  if with_steam_closed "set Titanfall 2's launch options" write_launch_options; then
+    LAUNCH_OPTIONS_SET=1
+  else
+    warn "launch options not set - set them by hand (see below)"
+  fi
+}
+
+clear_launch_options() {
+  [ -n "$STEAM" ] || return 0
+  if with_steam_closed "remove Titanfall 2's launch options" helper clear-launch-options "$STEAM" "$LAUNCHER" >/dev/null; then
+    ok "removed the launcher from Titanfall 2's launch options"
+  else
+    warn "Remove '$LAUNCHER %command%' from Titanfall 2's launch options in Steam (Properties -> General), or it won't start"
+  fi
+}
+
 # --------------------------------------------------------------- finish --
 # place <source file> <path relative to the game folder>
 place() {
@@ -332,9 +407,9 @@ uninstall() {
     done < "$STATE/files.txt"
     ok "removed $n mod files from $game"
   fi
+  clear_launch_options
   rm -rf "$STATE" "$CONF_DIR"
   ok "removed the launch wrapper"
-  warn "Clear Titanfall 2's launch options in Steam (Properties -> General -> Launch options), or it won't start"
   echo "  Kept: campaign saves (in the Wine prefix), the VC++ runtime in the prefix, and Northstar logs under $game/TF2VR"
 }
 
@@ -362,6 +437,7 @@ case "$MODE" in
       touch "$STATE/setup-pending"
       ok "the first VR launch from Steam builds the game assets and finishes the install"
     fi
+    set_launch_options
     ;;
 esac
 
@@ -372,16 +448,19 @@ if [ "$fails" -gt 0 ]; then
 fi
 echo "Done ($warns warning(s))."
 if [ "$MODE" = install ]; then
+  echo
+  if [ "$LAUNCH_OPTIONS_SET" = 1 ]; then
+    echo "All set. Put your headset on and press Play on Titanfall 2 in Steam."
+  else
+    echo "Last step, in Steam: Titanfall 2 -> Properties -> General -> Launch options, set exactly:"
+    echo
+    echo "    $(cat "$STATE/launch-options.txt")"
+    echo
+    echo "(also saved in $STATE/launch-options.txt to copy from). Then press Play."
+  fi
   cat <<EOF
-
-Last step, in Steam: Titanfall 2 -> Properties -> General -> Launch options, set exactly:
-
-    $(cat "$STATE/launch-options.txt")
-
-(also saved in $STATE/launch-options.txt to copy from). Then press Play.
-Play now starts Titanfall 2 VR. The first time, it builds the mod's game assets first, which takes
-a few minutes before the game appears. For the normal game, add -flat after %command%, or run:
-    echo flat > $CONF_DIR/mode
+The first launch builds the mod's game assets before the game appears, which takes a few minutes.
+For the normal game without VR: echo flat > $CONF_DIR/mode    (echo vr > ... to switch back)
 Logs: $LOG_DIR/launch.log
 EOF
 fi

@@ -12,6 +12,8 @@ Steam Frame (ARM64 SteamOS), on x86 SteamOS and inside Steam's container runtime
     tf2vr_frame.py vc-version DLL                version of a Microsoft msvcp140.dll
     tf2vr_frame.py extract ZIP DEST [MEMBER...]  unzip (SteamOS has no unzip by default)
     tf2vr_frame.py split-cabs EXE DIR            cut the cabinets out of vc_redist.x64.exe
+    tf2vr_frame.py set-launch-options STEAM WRAPPER    put the wrapper in Titanfall 2's launch options
+    tf2vr_frame.py clear-launch-options STEAM WRAPPER  take it out again
 """
 import hashlib
 import json
@@ -389,6 +391,160 @@ def cmd_split_cabs(args):
     return 0 if n else 1
 
 
+
+# ------------------------------------------------------ launch options --
+#
+# Steam keeps each account's launch options in userdata/<account>/config/localconfig.vdf, under
+# UserLocalConfigStore > Software > Valve > Steam > apps > <appid> > LaunchOptions. Steam reads it
+# at start and writes it back on exit, so it may only be edited while Steam is closed.
+# The file is edited structurally but otherwise kept byte-for-byte in its string contents: strings
+# stay in their escaped form, only the one value we write is escaped by us.
+
+
+class VdfError(Exception):
+    pass
+
+
+def vdf_load_raw(text):
+    """[[key, value], ...] where value is a raw (still escaped) string or a nested list."""
+    pos, n = 0, len(text)
+    root = []
+    stack = [root]
+    key = None
+    token = re.compile(r'\s+|//[^\n]*|"((?:[^"\\]|\\.)*)"|([{}])')
+    while pos < n:
+        m = token.match(text, pos)
+        if not m:
+            raise VdfError(f"unexpected text at offset {pos}: {text[pos:pos + 20]!r}")
+        pos = m.end()
+        quoted, brace = m.group(1), m.group(2)
+        if brace == "{":
+            if key is None:
+                raise VdfError("block without a key")
+            child = []
+            stack[-1].append([key, child])
+            stack.append(child)
+            key = None
+        elif brace == "}":
+            if len(stack) == 1 or key is not None:
+                raise VdfError("unbalanced braces")
+            stack.pop()
+        elif quoted is not None:
+            if key is None:
+                key = quoted
+            else:
+                stack[-1].append([key, quoted])
+                key = None
+    if len(stack) != 1 or key is not None:
+        raise VdfError("file ends inside a block")
+    return root
+
+
+def vdf_dump_raw(node, depth=0):
+    out = []
+    tabs = "\t" * depth
+    for key, value in node:
+        if isinstance(value, list):
+            out.append(f'{tabs}"{key}"\n{tabs}{{\n')
+            out.append(vdf_dump_raw(value, depth + 1))
+            out.append(f"{tabs}}}\n")
+        else:
+            out.append(f'{tabs}"{key}"\t\t"{value}"\n')
+    return "".join(out)
+
+
+def vdf_child(node, key, create=False):
+    for entry in node:
+        if entry[0].lower() == key.lower() and isinstance(entry[1], list):
+            return entry[1]
+    if not create:
+        return None
+    child = []
+    node.append([key, child])
+    return child
+
+
+def vdf_escape(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def vdf_unescape(value):
+    return value.replace('\\"', '"').replace("\\\\", "\\")
+
+
+def localconfigs(steam):
+    base = os.path.join(steam, "userdata")
+    try:
+        accounts = sorted(os.listdir(base))
+    except OSError:
+        return []
+    paths = (os.path.join(base, a, "config", "localconfig.vdf") for a in accounts if a.isdigit() and a != "0")
+    return [p for p in paths if os.path.isfile(p)]
+
+
+def with_wrapper(current, wrapper):
+    """Launch options with the wrapper in front of %command%, keeping whatever else was there."""
+    if wrapper in current:
+        return current
+    current = current.strip()
+    if "%command%" in current:
+        return current.replace("%command%", f"{wrapper} %command%", 1)
+    return f"{wrapper} %command% {current}".strip()
+
+
+def without_wrapper(current, wrapper):
+    result = current.replace(f"{wrapper} %command%", "%command%").replace(wrapper, "").strip()
+    return "" if result == "%command%" else result
+
+
+def edit_launch_options(steam, wrapper, change):
+    changed = []
+    for path in localconfigs(steam):
+        with open(path, encoding="utf-8", errors="surrogateescape") as fh:
+            text = fh.read()
+        tree = vdf_load_raw(text)
+        node = vdf_child(tree, "UserLocalConfigStore")
+        if node is None:
+            continue
+        for key in ("Software", "Valve", "Steam", "apps", APPID):
+            node = vdf_child(node, key, create=True)
+        entry = next((e for e in node if e[0].lower() == "launchoptions" and not isinstance(e[1], list)), None)
+        old = vdf_unescape(entry[1]) if entry else ""
+        new = change(old, wrapper)
+        if new == old:
+            continue
+        if entry:
+            entry[1] = vdf_escape(new)
+        else:
+            node.append(["LaunchOptions", vdf_escape(new)])
+        backup = path + ".tf2vr-frame.bak"
+        if not os.path.exists(backup):
+            with open(backup, "w", encoding="utf-8", errors="surrogateescape") as fh:
+                fh.write(text)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8", errors="surrogateescape") as fh:
+            fh.write(vdf_dump_raw(tree))
+        os.replace(tmp, path)
+        changed.append(path)
+    return changed
+
+
+def cmd_set_launch_options(args):
+    steam, wrapper = args
+    if not localconfigs(steam):
+        print("no Steam account found in userdata - sign in to Steam first", file=sys.stderr)
+        return 1
+    for path in edit_launch_options(steam, wrapper, with_wrapper):
+        print(path)
+    return 0
+
+
+def cmd_clear_launch_options(args):
+    steam, wrapper = args
+    for path in edit_launch_options(steam, wrapper, without_wrapper):
+        print(path)
+    return 0
+
 # ---------------------------------------------------------------- misc --
 
 
@@ -416,6 +572,8 @@ COMMANDS = {
     "vc-version": cmd_vc_version,
     "split-cabs": cmd_split_cabs,
     "extract": cmd_extract,
+    "set-launch-options": cmd_set_launch_options,
+    "clear-launch-options": cmd_clear_launch_options,
 }
 
 
@@ -428,6 +586,9 @@ def main(argv):
     except PeError as e:
         print("unknown")
         print(e, file=sys.stderr)
+        return 1
+    except VdfError as e:
+        print(f"couldn't read Steam's localconfig.vdf: {e}", file=sys.stderr)
         return 1
 
 

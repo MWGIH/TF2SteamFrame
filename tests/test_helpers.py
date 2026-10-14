@@ -136,5 +136,65 @@ class SteamDiscovery(unittest.TestCase):
         self.assertEqual(parsed["a"]["path"], "D:\\Games\\Steam")
 
 
+LOCALCONFIG = (
+    '"UserLocalConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n'
+    '\t\t\t\t"apps"\n\t\t\t\t{\n\t\t\t\t\t"1237970"\n\t\t\t\t\t{\n'
+    '\t\t\t\t\t\t"LastPlayed"\t\t"1760000000"\n\t\t\t\t\t}\n\t\t\t\t}\n'
+    '\t\t\t\t"Note"\t\t"C:\\\\path with \\"quotes\\""\n'
+    '\t\t\t}\n\t\t}\n\t}\n}\n')
+WRAPPER = "/home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch"
+
+
+class LaunchOptions(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.steam = self.tmp.name
+        cfg = os.path.join(self.steam, "userdata", "12345", "config")
+        os.makedirs(cfg)
+        self.path = os.path.join(cfg, "localconfig.vdf")
+        with open(self.path, "w") as fh:
+            fh.write(LOCALCONFIG)
+
+    def options(self):
+        tree = t.vdf_load_raw(open(self.path).read())
+        node = t.vdf_child(tree, "UserLocalConfigStore")
+        for key in ("Software", "Valve", "Steam", "apps", "1237970"):
+            node = t.vdf_child(node, key)
+        return {k: t.vdf_unescape(v) for k, v in node if not isinstance(v, list)}
+
+    def test_round_trip_keeps_other_strings(self):
+        self.assertEqual(t.vdf_dump_raw(t.vdf_load_raw(LOCALCONFIG)), LOCALCONFIG)
+
+    def test_set_and_clear(self):
+        self.assertEqual(t.edit_launch_options(self.steam, WRAPPER, t.with_wrapper), [self.path])
+        self.assertEqual(self.options()["LaunchOptions"], f"{WRAPPER} %command%")
+        self.assertEqual(self.options()["LastPlayed"], "1760000000")
+        self.assertIn('"Note"\t\t"C:\\\\path with \\"quotes\\""', open(self.path).read())
+        self.assertTrue(os.path.exists(self.path + ".tf2vr-frame.bak"))
+        # setting again changes nothing
+        self.assertEqual(t.edit_launch_options(self.steam, WRAPPER, t.with_wrapper), [])
+        t.edit_launch_options(self.steam, WRAPPER, t.without_wrapper)
+        self.assertEqual(self.options()["LaunchOptions"], "")
+
+    def test_existing_options_are_kept(self):
+        self.assertEqual(t.with_wrapper("gamemoderun %command% -novid", WRAPPER), f"gamemoderun {WRAPPER} %command% -novid")
+        self.assertEqual(t.with_wrapper("-novid", WRAPPER), f"{WRAPPER} %command% -novid")
+        self.assertEqual(t.without_wrapper(f"gamemoderun {WRAPPER} %command% -novid", WRAPPER), "gamemoderun %command% -novid")
+
+    def test_app_block_created_when_missing(self):
+        with open(self.path, "w") as fh:
+            fh.write('"UserLocalConfigStore"\n{\n\t"friends"\n\t{\n\t}\n}\n')
+        t.edit_launch_options(self.steam, WRAPPER, t.with_wrapper)
+        self.assertEqual(self.options()["LaunchOptions"], f"{WRAPPER} %command%")
+
+    def test_broken_file_is_left_alone(self):
+        with open(self.path, "w") as fh:
+            fh.write('"UserLocalConfigStore"\n{\n\t"apps"\n')
+        with self.assertRaises(t.VdfError):
+            t.edit_launch_options(self.steam, WRAPPER, t.with_wrapper)
+        self.assertEqual(open(self.path).read(), '"UserLocalConfigStore"\n{\n\t"apps"\n')
+
+
 if __name__ == "__main__":
     unittest.main()
