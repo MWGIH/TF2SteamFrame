@@ -199,6 +199,7 @@ inner_vr() {
     unset "$v"
   done
 
+  log "VR environment: $(env | grep -E '^(XR_|VR_|OPENXR|PROTON_|STEAM_COMPAT_TOOL_PATHS|SteamAppId)' | sort | tr '\n' ' ')"
   kill_orphans && log "Closed Wine processes left over from an earlier session."
 
   # Northstar needs a signed-in EA app; start it first so the launcher doesn't hang at "LSX: connect()".

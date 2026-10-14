@@ -102,12 +102,20 @@ It removes the mod files, and Titanfall 2's launch options are cleared at the ne
 
 ## If something goes wrong
 
+First, collect a diagnostics report. Quit Titanfall 2, open Konsole, and paste:
+
+```sh
+~/TF2SteamFrame/install.sh --diagnose
+```
+
+It prints the launch options Steam has saved, the restart job's log, which mod files are in place, and the end of every log from the last launch (launcher, asset builder, VR plugin, Northstar, crash monitor). The same report is saved to `~/tf2vr-frame-diagnostics.txt`; attach that file when asking for help or opening an issue.
+
 The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 
 | What you see | What to do |
 |---|---|
-| The game still starts flat after restarting | Run `~/TF2SteamFrame/install.sh --diagnose` and send the file it saves (`~/tf2vr-frame-diagnostics.txt`). Meanwhile, paste the launch options as described after step 5 of the install. |
-| The game starts flat | Check the launch options are exactly what `install.sh` printed, and that `~/.config/tf2vr-frame/mode` doesn't say `flat`. |
+| The launch options are missing after restarting | Paste them as described after step 5 of the install, and send the diagnostics report. |
+| The game starts flat, or hangs on the title screen | Send the diagnostics report. Also check the launch options are exactly what `install.sh` printed, and that `~/.config/tf2vr-frame/mode` doesn't say `flat`. |
 | Titanfall 2 doesn't start at all | Look at the end of `launch.log`. If it's unreadable, remove the launch options to get the normal game back. |
 | `install.sh`: `Titanfall 2 isn't installed in any Steam library` | Install it in Steam, or point at it: `./install.sh --game /path/to/Titanfall2`. |
 | `install.sh`: `Steam not found` | Run `STEAM_DIR=/path/to/Steam ./install.sh`. |
