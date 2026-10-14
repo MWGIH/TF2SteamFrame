@@ -21,74 +21,56 @@ This repo adapts two existing projects for the Steam Frame. All credit for the m
 | [polar421/Titanfall-2-VR-linux-fix](https://github.com/polar421/Titanfall-2-VR-linux-fix) by [polar421](https://github.com/polar421) | The first working Proton setup for the mod | The audio fix (sending the mod's loopback capture to the default playback device), applied here to the mod's DLL instead of to Proton |
 | [R2Northstar/Northstar](https://github.com/R2Northstar/Northstar) | The Titanfall 2 mod loader the VR mod runs on | Downloaded at the version CircuitLord's installer pins |
 
-## What you need
-
-- **A Steam Frame** (or any SteamOS / Linux device with Steam, ARM64 or x86_64)
-- **Titanfall 2 from Steam, installed on the Frame.** Internal storage, a microSD card or an external drive all work.
-- **A terminal on the Frame**: the desktop mode terminal (Konsole), or SSH from another computer
-- **An internet connection** and about 1 GB of free space for the download and staged files (the staged files are removed after the first launch)
-
-The installer uses `git`, `curl`, `python3`, `sha256sum` and `bsdtar`, which SteamOS already includes. Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder.
-
 ## Install on the Steam Frame
 
-### 1. Start Titanfall 2 once the normal way
+Two things in Steam first, then one command.
 
-In Steam, install Titanfall 2 and press **Play**, with no launch options set. The EA app installs itself the first time. Sign in to it, wait for Titanfall 2's main menu, then quit the game.
+**1. Start Titanfall 2 once the normal way.** Install Titanfall 2 in Steam and press Play. Sign in to the EA app when it appears, wait for the game's main menu, then quit. This sets up the EA app and the game's Wine prefix, which VR reuses.
 
-This creates the game's Wine prefix (the Windows-style folder Proton keeps for the game) and signs the EA app in. The VR launch reuses both.
+**2. Open Konsole.** Switch to desktop mode from the power menu (as on the Steam Deck) and open **Konsole** from the application launcher. Any terminal on the Frame works, including SSH from another computer.
 
-### 2. Open a terminal on the Frame
-
-Use one of these:
-- **Desktop mode:** switch to desktop mode from the power menu (as on the Steam Deck), then open **Konsole** from the application launcher.
-- **SSH from another computer:** in desktop mode, set a password with `passwd` and start SSH with `sudo systemctl enable --now sshd`. Then connect from your computer with `ssh <user>@<frame-ip>` (`whoami` and `ip addr` on the Frame show both).
-
-### 3. Download this repo and run the installer
+**3. Paste this command and press Enter:**
 
 ```sh
-cd ~
-git clone https://github.com/MWGIH/TF2SteamFrame.git
-cd TF2SteamFrame
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/MWGIH/TF2SteamFrame/main/setup.sh | bash
 ```
 
-Without git, download it with curl instead:
+That's the whole install. The command:
+- downloads this repo into `~/TF2SteamFrame`,
+- finds Steam, Titanfall 2 and its Wine prefix in any of your Steam libraries (internal storage, microSD card or external drive),
+- downloads the mod and Northstar from their official releases and checks their checksums,
+- copies Microsoft's VC++ runtime into the game's prefix and applies the audio fix,
+- **sets Titanfall 2's launch options in Steam for you.** Steam only reads launch options when it starts, so the installer asks `Close Steam now? [Y/n]`: press Enter, and it closes Steam, sets them, and opens Steam again.
+
+When it says **All set**, go back to game mode, put the headset on and press **Play** on Titanfall 2. The first launch builds the mod's game assets before anything appears, which takes a few minutes. After that, Play goes straight into VR.
+
+Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder. You need an internet connection and about 1 GB of free space.
+
+### If you'd rather set the launch options yourself
+
+Run the installer with `--no-launch-options`:
 ```sh
-cd ~
-curl -L https://github.com/MWGIH/TF2SteamFrame/archive/refs/heads/main.tar.gz | tar xz
-cd TF2SteamFrame-main
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/MWGIH/TF2SteamFrame/main/setup.sh | bash -s -- --no-launch-options
 ```
-
-The installer:
-1. finds Steam and every Steam library from `libraryfolders.vdf`, then finds Titanfall 2 and its Wine prefix in them,
-2. checks everything it needs and stops with a clear message if something is missing,
-3. copies Microsoft's current VC++ runtime into the game's prefix,
-4. downloads the mod and Northstar from their official release links and checks their checksums,
-5. applies the audio fix to the mod's DLL and stages the files, without changing the game folder yet,
-6. installs the launch wrapper in `~/.local/share/tf2vr-frame` and prints the launch options to use.
-
-To only see what it would check, without changing anything, run `./install.sh --check`. If the game isn't found, point at it with `./install.sh --game /path/to/Titanfall2`.
-
-### 4. Set Titanfall 2's launch options
-
-In Steam (game mode or desktop mode): Titanfall 2 → **Properties** → **General** → **Launch options**. Paste the line `install.sh` printed at the end. It looks like this, with your own home folder:
+Then in Steam open Titanfall 2 → **Properties** → **General** → **Launch options** and paste the line the installer printed. It looks like this, with your own home folder:
 ```
 /home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
 ```
-
-The line is also saved in `~/.local/share/tf2vr-frame/launch-options.txt`. In desktop mode you can open that file and copy it, which is easier than typing it on the headset's keyboard.
+It's also saved in `~/.local/share/tf2vr-frame/launch-options.txt` to copy from. If Titanfall 2 already had launch options, the installer keeps them and adds its part in front of `%command%`.
 
 Leave Titanfall 2's **Compatibility** setting on whatever Proton Steam picks. No custom Proton is needed.
 
-### 5. Press Play
+### Other install options
 
-Put the headset on and press **Play** on Titanfall 2.
+Add these after `bash -s --` in the command above, or pass them to `~/TF2SteamFrame/install.sh`:
 
-The **first launch** after installing or updating builds the mod's game assets from your game files before anything appears, which takes a few minutes. Once they're built and checked, the mod is copied into the game folder and the game starts in VR. Later launches go straight to the EA app and the game.
-
-If something goes wrong, everything is logged to `~/.local/state/tf2vr-frame/launch.log`. See [If something goes wrong](#if-something-goes-wrong).
+| Option | What it does |
+|---|---|
+| `--check` | Only check your setup, change nothing |
+| `--beta` | Install the mod's beta channel |
+| `--force` | Reinstall even if it's up to date |
+| `--yes` | Close and reopen Steam without asking |
+| `--game DIR` | Use this Titanfall 2 folder, if it isn't found |
 
 ## Play
 
@@ -106,19 +88,18 @@ For mod settings, controls and help with the mod itself, see [CircuitLord's Disc
 
 ## Update
 
+Run the same command again:
 ```sh
-cd TF2SteamFrame
-git pull
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/MWGIH/TF2SteamFrame/main/setup.sh | bash
 ```
-Then press Play. When there's a new mod release, the first launch after updating builds its assets again. `./install.sh --beta` installs the mod's beta channel instead.
+Then press Play. When there's a new mod release, the first launch after updating builds its assets again.
 
 ## Uninstall
 
 ```sh
-./install.sh --uninstall
+~/TF2SteamFrame/install.sh --uninstall
 ```
-Then clear Titanfall 2's launch options in Steam, or it won't start. Your VR campaign saves are kept.
+It removes the mod files and takes the launcher back out of Titanfall 2's launch options (closing Steam for a moment, like the install). Your VR campaign saves are kept.
 
 ## If something goes wrong
 
@@ -126,6 +107,7 @@ The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 
 | What you see | What to do |
 |---|---|
+| `launch options not set - set them by hand` | Steam wasn't closed, or no Steam account was found. Set them by hand as in [If you'd rather set the launch options yourself](#if-youd-rather-set-the-launch-options-yourself). |
 | The game starts flat | Check the launch options are exactly what `install.sh` printed, and that `~/.config/tf2vr-frame/mode` doesn't say `flat`. |
 | Titanfall 2 doesn't start at all | Look at the end of `launch.log`. If it's unreadable, remove the launch options to get the normal game back. |
 | `install.sh`: `Titanfall 2 isn't installed in any Steam library` | Install it in Steam, or point at it: `./install.sh --game /path/to/Titanfall2`. |
