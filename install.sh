@@ -7,12 +7,10 @@
 #   ./install.sh --beta        use the mod's beta channel instead of the stable release
 #   ./install.sh --uninstall   remove the mod files and the wrapper (campaign saves are kept)
 #   ./install.sh --game DIR    the folder with Titanfall2.exe, if it isn't found automatically
-#   ./install.sh --yes         close and reopen Steam without asking, to set the launch options
-#   ./install.sh --no-launch-options   don't touch Steam's launch options; set them by hand
+#   ./install.sh --no-launch-options   never touch Steam's launch options
 #
-# At the end it sets Titanfall 2's Steam launch options to start the VR launcher. Steam only
-# reads them at start and rewrites them on exit, so if Steam is running it asks to close Steam for
-# a moment, and starts it again afterwards.
+# Steam is never closed (on the Frame it is the device's shell). The installer prints the launch
+# options to paste into Steam; it only writes them itself when Steam isn't running.
 #
 # Run it on the Frame itself (desktop mode terminal, or over SSH). It works on any Steam Linux
 # device, ARM64 or x86_64, because it never runs Windows programs itself: the one step that needs
@@ -42,7 +40,6 @@ MODE=install
 FORCE=0
 CHANNEL=stable
 OPT_GAME=""
-YES=0
 LAUNCH_OPTIONS=1
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -51,7 +48,7 @@ while [ $# -gt 0 ]; do
     --finish)    MODE=finish ;;
     --force)     FORCE=1 ;;
     --beta)      CHANNEL=beta ;;
-    --yes|-y)    YES=1 ;;
+    --yes|-y)    ;;  # older versions closed Steam after asking; nothing to confirm any more
     --no-launch-options) LAUNCH_OPTIONS=0 ;;
     --game)
       [ $# -ge 2 ] && [ -d "$2" ] || { echo "install.sh: --game needs the folder with Titanfall2.exe" >&2; exit 2; }
@@ -274,47 +271,28 @@ install_launcher() {
 }
 
 # ------------------------------------------------------- launch options --
-steam_running() { pgrep -x steam >/dev/null 2>&1; }
+# Steam keeps launch options in memory and writes them back to localconfig.vdf whenever it saves
+# or exits, so the file may only be edited while Steam isn't running. On the Steam Frame (and Steam
+# Deck) Steam is the device's shell and closing it ends the session, so the installer never closes
+# Steam: it edits the file only when Steam is already closed (for example over SSH while Steam is
+# shut down), and otherwise prints the line to paste into Steam.
+steam_running() { pgrep -x steam >/dev/null 2>&1 || pgrep -x steamwebhelper >/dev/null 2>&1; }
 
-# with_steam_closed <what for> <command...>: run a command that edits Steam's config while Steam
-# is closed. Asks first, closes Steam, runs it, and starts Steam again. Returns 1 if not done.
-with_steam_closed() {
-  local why=$1 answer restart=0
-  shift
-  if steam_running; then
-    if [ "$YES" = 0 ]; then
-      if ! { : < /dev/tty; } 2>/dev/null; then
-        warn "Steam is running, so it can't be closed to $why without asking (run again with --yes)"
-        return 1
-      fi
-      printf '  Steam has to close for a moment to %s. Close Steam now? [Y/n] ' "$why"
-      read -r answer < /dev/tty || answer=n
-      case "$answer" in ''|[Yy]*) ;; *) return 1 ;; esac
-    fi
-    echo "  closing Steam..."
-    steam -shutdown >/dev/null 2>&1 &
-    for _ in $(seq 1 60); do steam_running || break; sleep 1; done
-    if steam_running; then
-      warn "Steam didn't close"
-      return 1
-    fi
-    restart=1
+# Best effort: put the launch options line on the desktop clipboard, so it only needs pasting
+copy_to_clipboard() {
+  if [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1; then
+    printf '%s' "$1" | wl-copy 2>/dev/null && return 0
   fi
-  local rc=0
-  "$@" || rc=$?
-  if [ "$restart" = 1 ]; then
-    echo "  starting Steam again..."
-    setsid steam >/dev/null 2>&1 < /dev/null &
+  if [ -n "${DISPLAY:-}" ] && command -v xclip >/dev/null 2>&1; then
+    printf '%s' "$1" | xclip -selection clipboard 2>/dev/null && return 0
   fi
-  return $rc
-}
-
-write_launch_options() {
-  local changed
-  changed=$(helper set-launch-options "$STEAM" "$LAUNCHER") || return 1
-  if [ -n "$changed" ]; then ok "launch options set ($(wc -l <<<"$changed") Steam account(s))"
-  else ok "launch options already set"
-  fi
+  # KDE Plasma (SteamOS desktop mode)
+  local q
+  for q in qdbus qdbus6 qdbus-qt5; do
+    command -v "$q" >/dev/null 2>&1 || continue
+    "$q" org.kde.klipper /klipper setClipboardContents "$1" >/dev/null 2>&1 && return 0
+  done
+  return 1
 }
 
 LAUNCH_OPTIONS_SET=0
@@ -322,19 +300,27 @@ set_launch_options() {
   echo
   echo "Steam launch options:"
   [ "$LAUNCH_OPTIONS" = 1 ] || { ok "left alone (--no-launch-options)"; return; }
-  if with_steam_closed "set Titanfall 2's launch options" write_launch_options; then
+  if steam_running; then
+    ok "Steam is running, so set them in Steam (see below)"
+    return
+  fi
+  local changed
+  if changed=$(helper set-launch-options "$STEAM" "$LAUNCHER"); then
     LAUNCH_OPTIONS_SET=1
+    if [ -n "$changed" ]; then ok "launch options set ($(wc -l <<<"$changed") Steam account(s))"
+    else ok "launch options already set"
+    fi
   else
-    warn "launch options not set - set them by hand (see below)"
+    warn "couldn't set the launch options - set them in Steam (see below)"
   fi
 }
 
 clear_launch_options() {
   [ -n "$STEAM" ] || return 0
-  if with_steam_closed "remove Titanfall 2's launch options" helper clear-launch-options "$STEAM" "$LAUNCHER" >/dev/null; then
+  if ! steam_running && helper clear-launch-options "$STEAM" "$LAUNCHER" >/dev/null; then
     ok "removed the launcher from Titanfall 2's launch options"
   else
-    warn "Remove '$LAUNCHER %command%' from Titanfall 2's launch options in Steam (Properties -> General), or it won't start"
+    warn "In Steam, remove '$LAUNCHER %command%' from Titanfall 2 -> Properties -> General -> Launch options, or the game won't start"
   fi
 }
 
@@ -452,11 +438,15 @@ if [ "$MODE" = install ]; then
   if [ "$LAUNCH_OPTIONS_SET" = 1 ]; then
     echo "All set. Put your headset on and press Play on Titanfall 2 in Steam."
   else
-    echo "Last step, in Steam: Titanfall 2 -> Properties -> General -> Launch options, set exactly:"
+    line=$(cat "$STATE/launch-options.txt")
+    copied=""
+    copy_to_clipboard "$line" && copied=" (already copied to the clipboard: just paste it)"
+    echo "Last step, in Steam: Titanfall 2 -> gear icon -> Properties -> General -> Launch options."
+    echo "Set it to exactly this$copied:"
     echo
-    echo "    $(cat "$STATE/launch-options.txt")"
+    echo "    $line"
     echo
-    echo "(also saved in $STATE/launch-options.txt to copy from). Then press Play."
+    echo "It's also saved in $STATE/launch-options.txt. Then press Play."
   fi
   cat <<EOF
 The first launch builds the mod's game assets before the game appears, which takes a few minutes.
