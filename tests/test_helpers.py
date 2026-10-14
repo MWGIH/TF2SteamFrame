@@ -177,6 +177,13 @@ class LaunchOptions(unittest.TestCase):
         t.edit_launch_options(self.steam, WRAPPER, t.without_wrapper)
         self.assertEqual(self.options()["LaunchOptions"], "")
 
+    def test_check(self):
+        self.assertFalse(t.launch_options_set(self.steam, WRAPPER))
+        t.edit_launch_options(self.steam, WRAPPER, t.with_wrapper)
+        self.assertTrue(t.launch_options_set(self.steam, WRAPPER))
+        t.edit_launch_options(self.steam, WRAPPER, t.without_wrapper)
+        self.assertFalse(t.launch_options_set(self.steam, WRAPPER))
+
     def test_existing_options_are_kept(self):
         self.assertEqual(t.with_wrapper("gamemoderun %command% -novid", WRAPPER), f"gamemoderun {WRAPPER} %command% -novid")
         self.assertEqual(t.with_wrapper("-novid", WRAPPER), f"{WRAPPER} %command% -novid")

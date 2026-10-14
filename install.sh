@@ -8,10 +8,13 @@
 #   ./install.sh --uninstall   remove the mod files and the wrapper (campaign saves are kept)
 #   ./install.sh --game DIR    the folder with Titanfall2.exe, if it isn't found automatically
 #   ./install.sh --no-launch-options   never touch Steam's launch options
+#   ./install.sh --restart     restart the device at the end without asking, if that's needed to
+#                              set the launch options
 #   ./install.sh --diagnose    print what's needed to debug the launch options (also saved to a file)
 #
-# Steam is never closed (on the Frame it is the device's shell). The installer prints the launch
-# options to paste into Steam; it only writes them itself when Steam isn't running.
+# Steam is never closed (on the Frame it is the device's shell). Steam rewrites its settings while
+# it runs, so when it's running the launch options are set during the next restart, which the
+# installer offers to do at the end.
 #
 # Run it on the Frame itself (desktop mode terminal, or over SSH). It works on any Steam Linux
 # device, ARM64 or x86_64, because it never runs Windows programs itself: the one step that needs
@@ -42,6 +45,7 @@ FORCE=0
 CHANNEL=stable
 OPT_GAME=""
 LAUNCH_OPTIONS=1
+RESTART=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --check)     MODE=check ;;
@@ -52,6 +56,7 @@ while [ $# -gt 0 ]; do
     --beta)      CHANNEL=beta ;;
     --yes|-y)    ;;  # older versions closed Steam after asking; nothing to confirm any more
     --no-launch-options) LAUNCH_OPTIONS=0 ;;
+    --restart)   RESTART=1 ;;
     --game)
       [ $# -ge 2 ] && [ -d "$2" ] || { echo "install.sh: --game needs the folder with Titanfall2.exe" >&2; exit 2; }
       OPT_GAME=$(readlink -f "$2")
@@ -349,6 +354,12 @@ set_launch_options() {
   echo "Steam launch options:"
   [ "$LAUNCH_OPTIONS" = 1 ] || { ok "left alone (--no-launch-options)"; return; }
   if steam_running; then
+    if helper check-launch-options "$STEAM" "$LAUNCHER" 2>/dev/null; then
+      LAUNCH_OPTIONS_SET=1
+      rm -f "$BOOT_DIR/pending"
+      ok "launch options already set"
+      return
+    fi
     # Never close Steam: on the Frame it is the device's shell
     if schedule_launch_options set; then
       LAUNCH_OPTIONS_PENDING=1
@@ -602,17 +613,10 @@ if [ "$MODE" = install ]; then
   if [ "$LAUNCH_OPTIONS_SET" = 1 ]; then
     echo "All set. Put your headset on and press Play on Titanfall 2 in Steam."
   elif [ "$LAUNCH_OPTIONS_PENDING" = 1 ]; then
-    line=$(cat "$STATE/launch-options.txt")
-    copy_to_clipboard "$line" || true
     cat <<EOF
-Last step: restart the device (Steam menu -> Power -> Restart).
-Titanfall 2's launch options are set automatically during the restart, while Steam is closed.
-Then put your headset on and press Play on Titanfall 2.
-
-To play without restarting, paste this into Titanfall 2 -> gear icon -> Properties -> General ->
-Launch options instead (it's on the clipboard, and saved in $STATE/launch-options.txt):
-
-    $line
+Last step: restart the device. Titanfall 2's launch options are put in during the restart, while
+Steam is closed (Steam rewrites its settings while it runs, so they can't be set before that).
+After the restart, put your headset on and press Play on Titanfall 2.
 
 EOF
   else
@@ -631,4 +635,25 @@ The first launch builds the mod's game assets before the game appears, which tak
 For the normal game without VR: echo flat > $CONF_DIR/mode    (echo vr > ... to switch back)
 Logs: $LOG_DIR/launch.log (Steam, Proton and game output: $LOG_DIR/output.log)
 EOF
+fi
+
+if [ "$MODE" = install ] && [ "$LAUNCH_OPTIONS_PENDING" = 1 ]; then
+  echo
+  answer=n
+  if [ "$RESTART" = 1 ]; then
+    answer=y
+  elif { : < /dev/tty; } 2>/dev/null; then
+    printf 'Restart now? [Y/n] '
+    read -r answer < /dev/tty || answer=n
+    answer=${answer:-y}
+  fi
+  case "$answer" in
+    [Yy]*)
+      echo "Restarting..."
+      sync
+      systemctl reboot 2>/dev/null || loginctl reboot 2>/dev/null \
+        || echo "Couldn't restart from here: use Steam menu -> Power -> Restart."
+      ;;
+    *) echo "Restart whenever you're ready: Steam menu -> Power -> Restart." ;;
+  esac
 fi
