@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+# Titanfall 2 VR (CircuitLord's TF2VR mod) started by Steam itself, for the Steam Frame.
+#
+# Set as Titanfall 2's Steam launch options (install.sh prints the exact line):
+#     /home/<you>/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
+#
+# Steam then hands this script the command it was going to run, typically
+#     [reaper ... --] [<container runtime entry point> ... --] <Proton>/proton waitforexitandrun <library>/steamapps/common/Titanfall2/Titanfall2.exe
+# and this script runs that same command, with only the Windows side swapped:
+#   * Titanfall2.exe is replaced by this script in "inner" mode, which runs inside Steam's own
+#     runtime (FEX x86 emulation + Proton on the Frame) and from there starts the EA app, waits for
+#     it to sign in, and starts crash_monitor.exe -> Titanfall2VRLauncher.exe with the TF2VR profile,
+#     exactly what the Windows installer's Play button does.
+#   * The first time after install.sh, it first runs the mod's asset_patcher.exe the same way, then
+#     lets install.sh --finish verify and place the built files.
+#
+# Because Steam starts everything, nothing here assumes where Steam, the game or Proton live, which
+# CPU this is, or which Proton build Steam chose: the paths all come from Steam's own command line.
+#
+# Starting the normal, flat game instead: add -flat after %command% in the launch options, or
+#     echo flat > ~/.config/tf2vr-frame/mode        (echo vr > ... to switch back)
+set -uo pipefail
+
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+HERE=$(dirname "$SELF")
+STATE="${XDG_DATA_HOME:-$HOME/.local/share}/tf2vr-frame"
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/tf2vr-frame"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/tf2vr-frame"
+HELPER="$HERE/lib/tf2vr_frame.py"
+[ -f "$HELPER" ] || HELPER="$STATE/lib/tf2vr_frame.py"
+STEAM_OFFER="Origin.OFR.50.0001456"
+
+mkdir -p "$LOG_DIR"
+
+log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+die() {
+  log "ERROR: $1"
+  command -v notify-send >/dev/null 2>&1 && notify-send -a "Titanfall 2 VR" -i dialog-error "Titanfall 2 VR" "$1" 2>/dev/null
+  exit 1
+}
+# Windows path of a Linux path, as Wine sees it through drive Z:
+win() { local p; p=$(readlink -f "$1"); printf 'Z:%s' "${p//\//\\}"; }
+
+# ====================================================================== inner ==
+# Runs inside Steam's runtime, in place of Titanfall2.exe.
+#   tf2vr-frame-launch --inner <setup|vr> <runner count> <runner...> <Titanfall2.exe> [game args...]
+# <runner...> is what Steam put in front of Titanfall2.exe, usually: <Proton>/proton waitforexitandrun
+inner() {
+  local job=$1 n=$2
+  shift 2
+  RUNNER=("${@:1:$n}")
+  shift "$n"
+  local exe=$1
+  shift
+  G=$(dirname "$(readlink -f "$exe")")
+
+  PROTON=""
+  if [ "${#RUNNER[@]}" -ge 2 ] && [ "$(basename "${RUNNER[0]}")" = proton ]; then
+    PROTON=${RUNNER[0]}
+  fi
+
+  case "$job" in
+    setup) inner_setup "$@" ;;
+    vr)    inner_vr "$@" ;;
+    *)     die "unknown job $job" ;;
+  esac
+}
+
+# wrun <run|waitforexitandrun> <windows exe> [args...]: start a Windows program in the game's Wine prefix
+wrun() {
+  local verb=$1
+  shift
+  if [ -n "$PROTON" ]; then
+    "$PROTON" "$verb" "$@"
+  else
+    "${RUNNER[@]}" "$@"
+  fi
+}
+
+# End the Wine session of the game's prefix (the EA app keeps it alive otherwise, and Steam then
+# keeps showing Titanfall 2 as running).
+end_session() {
+  local ws
+  [ -n "$PROTON" ] || return 0
+  for ws in "$(dirname "$PROTON")/files/bin/wineserver" "$(dirname "$PROTON")/dist/bin/wineserver"; do
+    if [ -x "$ws" ]; then
+      WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$ws" -k 2>/dev/null
+      break
+    fi
+  done
+  kill_orphans || true
+}
+
+# Wine processes of this prefix (their binaries live in Proton's folder, and Proton gives them
+# WINEPREFIX). With ntsync, processes blocked in a wait outlive their wineserver and then wait
+# forever; without a wineserver nothing can recover them, so end them. Returns 0 if it killed some.
+prefix_pids() {
+  local p t exe pfx=${STEAM_COMPAT_DATA_PATH:-}/pfx pfx_canon proton_dir
+  [ -n "$PROTON" ] && [ -n "${STEAM_COMPAT_DATA_PATH:-}" ] || return 0
+  proton_dir="$(readlink -f "$(dirname "$PROTON")")/"
+  pfx_canon=$(readlink -f "$pfx")
+  for p in /proc/[0-9]*; do
+    t=$p
+    if ! exe=$(readlink "$p/exe" 2>/dev/null); then
+      for t in "$p"/task/*; do exe=$(readlink "$t/exe" 2>/dev/null) && break; done
+    fi
+    # Under FEX the kernel sees the emulator as the executable, so also accept that and rely on WINEPREFIX
+    case "$exe" in "$proton_dir"*|*FEX*) ;; *) continue ;; esac
+    grep -qzxF -e "WINEPREFIX=$pfx" -e "WINEPREFIX=$pfx/" -e "WINEPREFIX=$pfx_canon" -e "WINEPREFIX=$pfx_canon/" \
+      "$t/environ" 2>/dev/null && echo "${p#/proc/}"
+  done
+}
+kill_orphans() {
+  local pids p
+  pids=$(prefix_pids)
+  [ -n "$pids" ] || return 1
+  for p in $pids; do
+    case "$(tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | head -n 2)" in *wineserver*) return 1 ;; esac
+  done
+  # shellcheck disable=SC2086
+  kill -KILL $pids 2>/dev/null
+  return 0
+}
+
+vc_new_enough() { [ -n "$1" ] && [ "$(printf '%s\n14.40\n' "$1" | sort -V | head -n 1)" = "14.40" ]; }
+
+# install.sh put Microsoft's current VC++ runtime into the prefix (the mod crashes in MSVCP140.dll
+# with the 14.3x one the EA app brings). Steam updates Proton by itself, and a prefix upgrade can
+# put Wine's own copy back, so check again on every launch and restore it from install.sh's copy.
+ensure_vcrt() {
+  local sys32="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/windows/system32" version dll
+  compgen -G "$STATE/vcrt/*.dll" >/dev/null || return 0
+  version=$(python3 "$HELPER" vc-version "$sys32/msvcp140.dll")
+  vc_new_enough "$version" && return 0
+  for dll in "$STATE"/vcrt/*.dll; do
+    rm -f "$sys32/$(basename "$dll")"   # may be a link to Proton's own copy; never write through it
+    cp "$dll" "$sys32/"
+  done
+  log "Restored the VC++ runtime in the prefix (it was ${version:-the Wine built-in copy})."
+}
+
+inner_setup() {
+  local stage="$STATE/stage"
+  [ -f "$stage/mod/asset_patcher.exe" ] || die "$stage is incomplete - run install.sh again."
+  rm -rf "$stage/assets"
+  log "Building the mod's game assets with asset_patcher.exe (first launch only, this can take a few minutes)..."
+  wrun run "$stage/mod/asset_patcher.exe" apply "$(win "$G")" "$(win "$stage/mod/patches")" "$(win "$stage/assets")" \
+    > "$LOG_DIR/asset_patcher.log" 2>&1
+  local rc=$?
+  log "asset_patcher.exe exited with code $rc (log: $LOG_DIR/asset_patcher.log)"
+  end_session
+  return 0
+}
+
+ea_running() {
+  local p
+  for p in /proc/[0-9]*; do
+    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
+      *'\EADesktop.exe'*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+monitor_running() {
+  local p
+  for p in /proc/[0-9]*; do
+    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
+      *[A-Za-z]:\\*\\crash_monitor.exe*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+inner_vr() {
+  local f
+  for f in Titanfall2VRLauncher.exe TF2VR/Northstar.dll TF2VR/plugins/Titanfall2VR.dll \
+           TF2VR/tools/crash_monitor.exe TF2VR/tools/launch.json; do
+    [ -f "$G/$f" ] || die "$G/$f is missing - run install.sh again."
+  done
+  # Mods that drop their own DirectX next to the game take Present away from VR rendering
+  for f in "$G"/{,bin/x64_retail/}{dxgi,d3d11}.dll; do
+    [ -f "$f" ] && die "Another mod replaced DirectX files, which breaks VR rendering. Remove $f and launch again."
+  done
+  [ -n "${STEAM_COMPAT_DATA_PATH:-}" ] || die "Steam didn't start Titanfall 2 with Proton (no STEAM_COMPAT_DATA_PATH). Check Properties -> Compatibility."
+
+  # Same TF2VR_* environment the Windows installer gives the game. Unlike tf2vr-linux, leave
+  # XR_RUNTIME_JSON and the VR_* paths alone: here Steam set them up for this launch.
+  local v
+  while IFS= read -r v; do
+    case "$v" in TF2VR_*) unset "$v" ;; esac
+  done < <(compgen -e)
+  export TF2VR_OPENXR=1
+  # VR needs DXVK: wineopenxr hands the game's D3D11 frames to the headset as DXVK textures.
+  for v in PROTON_USE_WINED3D PROTON_USE_WINED3D11; do
+    if [ -n "${!v:-}" ] && [ "${!v}" != 0 ]; then
+      log "WARNING: ignoring $v=${!v} - VR needs DXVK"
+    fi
+    unset "$v"
+  done
+
+  kill_orphans && log "Closed Wine processes left over from an earlier session."
+
+  # Northstar needs a signed-in EA app; start it first so the launcher doesn't hang at "LSX: connect()".
+  local ea_exe='C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EADesktop.exe'
+  local ea_data="$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/EA Desktop"
+  local ea_log="$ea_data/Logs/EADesktop.log" ea_log_start size i signed_in=0
+  if ! ea_running; then
+    # A killed session leaves this behind, and the EA app may then dial a dead port and sign in late
+    rm -f "$ea_data/backgroundservice.ini"
+    ea_log_start=$(stat -c %s "$ea_log" 2>/dev/null || echo 0)
+    log "Starting the EA app..."
+    wrun run "$ea_exe" >/dev/null 2>&1 &
+    for _ in $(seq 1 90); do ea_running && break; sleep 1; done
+    ea_running || die "The EA app didn't start. Start Titanfall 2 once in flat mode (-flat) and sign in to the EA app."
+    for i in $(seq 1 240); do
+      size=$(stat -c %s "$ea_log" 2>/dev/null || echo 0)
+      [ "$size" -ge "$ea_log_start" ] || ea_log_start=0
+      if tail -c +$((ea_log_start + 1)) "$ea_log" 2>/dev/null | grep -q onAuthSuccessUpdated; then
+        signed_in=1
+        break
+      fi
+      [ "$i" = 20 ] && log "Waiting for the EA app to sign in - if its window asks, sign in there."
+      sleep 1
+    done
+    if [ "$signed_in" = 1 ]; then log "EA app signed in."; sleep 2
+    else log "WARNING: couldn't confirm the EA app signed in. If the game says you're logged out, sign in to the EA app and launch again."
+    fi
+  fi
+
+  ensure_vcrt
+
+  local -a args
+  mapfile -t args < <(python3 "$HELPER" launch-args "$G/TF2VR/tools/launch.json")
+  [ "${#args[@]}" -gt 0 ] || die "Couldn't read $G/TF2VR/tools/launch.json"
+
+  log "Launching Titanfall 2 VR from $G"
+  cd "$G" || die "can't enter $G"
+  ContentId=$STEAM_OFFER wrun run "$G/TF2VR/tools/crash_monitor.exe" "$(win "$G/TF2VR")" "$(win "$G/Titanfall2VRLauncher.exe")" \
+    "${args[@]}" "$@" &
+  local proton_pid=$!
+
+  # `proton run` keeps waiting while the EA app is open, so follow crash_monitor.exe instead
+  local seen=0
+  for _ in $(seq 1 120); do
+    monitor_running && { seen=1; break; }
+    kill -0 "$proton_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if [ "$seen" = 1 ]; then
+    while monitor_running; do sleep 2; done
+  elif kill -0 "$proton_pid" 2>/dev/null; then
+    log "WARNING: couldn't find crash_monitor.exe, so this can't tell when the game ends."
+    wait "$proton_pid" 2>/dev/null
+  fi
+
+  local session rc
+  session=$(ls -1d "$G"/TF2VR/crashes/*/ 2>/dev/null | tail -n 1)
+  rc=$(sed -n 's/.*process_exit pid=[0-9]* code=\([0-9-]*\).*/\1/p' "$session/monitor.txt" 2>/dev/null | tail -n 1)
+  log "Game exited with code ${rc:-unknown}"
+  end_session
+  wait "$proton_pid" 2>/dev/null
+  [ "${rc:-0}" = 0 ] || die "Titanfall 2 VR exited with code $rc - see $LOG_DIR/launch.log, ${session:-$G/TF2VR/crashes} and $G/TF2VR/logs"
+  return 0
+}
+
+# ====================================================================== outer ==
+# Runs where Steam runs launch options, with Steam's full command line as arguments.
+outer() {
+  exec >> "$LOG_DIR/launch.log" 2>&1
+  log "---- Steam launch: $*"
+
+  local -a cmd=("$@") tail_args=()
+  local mode i exe_i=-1 runner_i=-1 flat=0
+  mode=$(tr -d '[:space:]' < "$CONF_DIR/mode" 2>/dev/null)
+  [ "${TF2VR_FRAME_MODE:-}" = flat ] && mode=flat
+
+  for i in "${!cmd[@]}"; do
+    case "${cmd[$i]}" in
+      -flat|--flat) flat=1 ;;
+    esac
+    if [ "$exe_i" -lt 0 ]; then
+      case "$(basename "${cmd[$i]}" | tr '[:upper:]' '[:lower:]')" in
+        titanfall2.exe) exe_i=$i ;;
+      esac
+    fi
+  done
+  # Drop our own -flat switch so the game never sees it
+  if [ "$flat" = 1 ]; then
+    local -a clean=()
+    for i in "${!cmd[@]}"; do
+      case "${cmd[$i]}" in -flat|--flat) [ "$i" -lt "$exe_i" ] || continue ;; esac
+      clean+=("${cmd[$i]}")
+    done
+    cmd=("${clean[@]}")
+  fi
+
+  if [ "$flat" = 1 ] || [ "$mode" = flat ]; then
+    log "Flat mode: starting the normal game."
+    exec "${cmd[@]}"
+  fi
+  if [ "$exe_i" -lt 0 ]; then
+    log "ERROR: Titanfall2.exe isn't in Steam's command line, so VR can't be started. Starting it unchanged."
+    exec "${cmd[@]}"
+  fi
+
+  # The Windows-program runner Steam put in front of Titanfall2.exe: from Proton's `proton` script
+  # if there is one, else everything after the last "--".
+  for ((i = exe_i - 1; i >= 0; i--)); do
+    if [ "$(basename "${cmd[$i]}")" = proton ]; then runner_i=$i; break; fi
+  done
+  if [ "$runner_i" -lt 0 ]; then
+    for ((i = exe_i - 1; i >= 0; i--)); do
+      if [ "${cmd[$i]}" = -- ]; then runner_i=$((i + 1)); break; fi
+    done
+  fi
+  if [ "$runner_i" -lt 0 ] || [ "$runner_i" -ge "$exe_i" ]; then
+    log "ERROR: couldn't find how Steam runs Windows programs in its command line (no proton). Starting the game unchanged."
+    exec "${cmd[@]}"
+  fi
+
+  local -a pre=("${cmd[@]:0:runner_i}") runner=("${cmd[@]:runner_i:exe_i-runner_i}")
+  local exe=${cmd[$exe_i]}
+  tail_args=("${cmd[@]:exe_i+1}")
+  log "runner: ${runner[*]}"
+  log "game:   $exe"
+
+  # First launch after install.sh: build the game assets with asset_patcher.exe, then place the mod
+  if [ -f "$STATE/setup-pending" ]; then
+    log "Setting up the mod (first VR launch)..."
+    "${pre[@]}" "$SELF" --inner setup "${#runner[@]}" "${runner[@]}" "$exe"
+    if ! "$STATE/install.sh" --finish --game "$(dirname "$exe")"; then
+      die "Setting up the mod failed - see $LOG_DIR/launch.log. Run install.sh again, then launch again."
+    fi
+  fi
+
+  exec "${pre[@]}" "$SELF" --inner vr "${#runner[@]}" "${runner[@]}" "$exe" "${tail_args[@]}"
+}
+
+if [ "${1:-}" = --inner ]; then
+  shift
+  exec >> "$LOG_DIR/launch.log" 2>&1
+  os_name=$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"')
+  log "inner ($1) running in: $(uname -m), ${os_name:-unknown OS}"
+  inner "$@"
+  exit $?
+fi
+[ $# -gt 0 ] || { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$SELF"; exit 2; }
+outer "$@"

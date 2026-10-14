@@ -1,0 +1,15 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck -S warning install.sh tf2vr-frame-launch tests/test_launch.sh
+      - name: unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: launch wrapper
+        run: bash tests/test_launch.sh
