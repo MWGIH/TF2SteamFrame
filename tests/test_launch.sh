@@ -44,7 +44,12 @@ case "\$1" in
     exec -a 'C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe' sleep 30 ;;
   *setup_progress.exe)
     out=\$(printf '%s' "\$7" | sed 's/^Z://; s|\\\\|/|g')
-    mkdir -p "\$out/mods/x"; printf 'built' > "\$out/mods/x/file.txt" ;;
+    mkdir -p "\$out/mods/x"; printf 'built' > "\$out/mods/x/file.txt"
+    # like setup_progress.exe: the log's last line says the build ended; then linger, as a Wine
+    # session that keeps \`proton run\` waiting would
+    plog=\$(printf '%s' "\$2" | sed 's/^Z://; s|\\\\|/|g')
+    printf 'asset_patcher exit code 0\r\n' > "\$plog"
+    exec sleep 30 ;;
   *crash_monitor.exe)
     g=\$(dirname "\$1"); g=\$(dirname "\$(dirname "\$g")")
     mkdir -p "\$g/TF2VR/crashes/s1"; echo "process_exit pid=1 code=0" > "\$g/TF2VR/crashes/s1/monitor.txt"
@@ -87,7 +92,9 @@ ok "-flat starts the normal game, without the -flat switch"
 : > "$CALLS"
 
 # --- 2. first VR launch: setup job, finish, then VR ---------------------------------------------
+start=$SECONDS
 "$L" "${steam_cmd[@]}" +map sp_crashsite || fail "first launch exits 0"
+[ $((SECONDS - start)) -lt 25 ] || fail "setup doesn't wait for a Wine session that stays up after the build"
 grep -q '^run |.*setup_progress.exe |Z:.*asset_patcher.log |Z:.*asset_patcher.exe |apply |Z:.*Titanfall2' "$CALLS" || fail "asset_patcher.exe runs through Steam's proton, under the progress window, with the game folder"
 [ ! -e "$STATE/setup-pending" ] || fail "setup-pending is cleared"
 [ -f "$GAME/TF2VR/mods/x/file.txt" ] && [ -f "$GAME/Titanfall2VRLauncher.exe" ] && [ -f "$GAME/TF2VR/plugins/Titanfall2VR.dll" ] \
