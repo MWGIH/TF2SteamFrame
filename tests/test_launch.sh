@@ -43,13 +43,18 @@ case "\$1" in
     ( sleep 1; echo "onAuthSuccessUpdated" >> "\$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/EA Desktop/Logs/EADesktop.log" ) &
     exec -a 'C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe' sleep 30 ;;
   *setup_progress.exe)
+    # As on the Steam Frame, \`proton run\` returns at once while the program keeps running: the
+    # build finishes a few seconds later and the log's last line says so. A Wine process then
+    # lingers, as one that would keep \`proton run\` waiting elsewhere.
     out=\$(printf '%s' "\$7" | sed 's/^Z://; s|\\\\|/|g')
-    mkdir -p "\$out/mods/x"; printf 'built' > "\$out/mods/x/file.txt"
-    # like setup_progress.exe: the log's last line says the build ended; then linger, as a Wine
-    # session that keeps \`proton run\` waiting would
     plog=\$(printf '%s' "\$2" | sed 's/^Z://; s|\\\\|/|g')
-    printf 'asset_patcher exit code 0\r\n' > "\$plog"
-    exec sleep 30 ;;
+    (
+      ( exec -a 'Z:\\stage\\setup_progress.exe' sleep 4 )
+      mkdir -p "\$out/mods/x"; printf 'built' > "\$out/mods/x/file.txt"
+      printf 'asset_patcher exit code 0\r\n' > "\$plog"
+      exec sleep 30
+    ) >/dev/null 2>&1 &
+    ;;
   *crash_monitor.exe)
     g=\$(dirname "\$1"); g=\$(dirname "\$(dirname "\$g")")
     mkdir -p "\$g/TF2VR/crashes/s1"; echo "process_exit pid=1 code=0" > "\$g/TF2VR/crashes/s1/monitor.txt"

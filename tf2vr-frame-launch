@@ -157,16 +157,25 @@ inner_setup() {
     # and writes "asset_patcher exit code N" as the log's last line when the build ends.
     wrun run "$STATE/lib/setup_progress.exe" "$(win "$plog")" "${patch[@]}" &
     pid=$!
-    # Don't rely on `proton run` returning: other Wine processes of the session can keep it waiting
-    while kill -0 "$pid" 2>/dev/null; do
+    # `proton run` can return at once (it does on the Steam Frame) or keep waiting on other Wine
+    # processes of the session, so follow the programs and the log instead. Done when the log's
+    # last line is there; failed when neither program has been running for a while.
+    local gone=0 t=0
+    while :; do
       grep -q '^asset_patcher exit code' "$plog" 2>/dev/null && break
-      sleep 2
+      if win_running setup_progress.exe || win_running asset_patcher.exe; then gone=0
+      else gone=$((gone + 1))
+      fi
+      # allow time for Wine to start the program; then a short grace for the log's last write
+      if [ "$t" -ge 60 ] && [ "$gone" -ge 5 ] && ! kill -0 "$pid" 2>/dev/null; then break; fi
+      sleep 2; t=$((t + 2))
     done
     rc=$(sed -n 's/^asset_patcher exit code \([0-9]*\).*/\1/p' "$plog" 2>/dev/null | tail -n 1)
     if [ -n "$rc" ]; then
       sleep 2   # leave "Done" on screen for a moment
     else
-      wait "$pid"; rc=$?
+      log "WARNING: the asset build ended without reporting a result."
+      rc=unknown
     fi
   else
     wrun run "$stage/mod/asset_patcher.exe" "${patch[@]:1}" > "$plog" 2>&1
@@ -187,6 +196,18 @@ ea_running() {
   for p in /proc/[0-9]*; do
     case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
       *'\EADesktop.exe'*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Is a Windows program of this name running? Wine processes show their Windows path in argv.
+win_running() {
+  local p name
+  name=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  for p in /proc/[0-9]*; do
+    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2 | tr '[:upper:]' '[:lower:]')" in
+      *[\\/]"$name"*) return 0 ;;
     esac
   done
   return 1
@@ -272,10 +293,10 @@ inner_vr() {
   local proton_pid=$!
 
   # `proton run` keeps waiting while the EA app is open, so follow crash_monitor.exe instead
+  # (it can also return before the program has even started, as on the Steam Frame)
   local seen=0
   for _ in $(seq 1 120); do
     monitor_running && { seen=1; break; }
-    kill -0 "$proton_pid" 2>/dev/null || break
     sleep 1
   done
   if [ "$seen" = 1 ]; then
