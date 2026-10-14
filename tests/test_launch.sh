@@ -42,8 +42,8 @@ case "\$1" in
     mkdir -p "\$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/EA Desktop/Logs"
     ( sleep 1; echo "onAuthSuccessUpdated" >> "\$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/EA Desktop/Logs/EADesktop.log" ) &
     exec -a 'C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe' sleep 30 ;;
-  *asset_patcher.exe)
-    out=\$(printf '%s' "\$5" | sed 's/^Z://; s|\\\\|/|g')
+  *setup_progress.exe)
+    out=\$(printf '%s' "\$7" | sed 's/^Z://; s|\\\\|/|g')
     mkdir -p "\$out/mods/x"; printf 'built' > "\$out/mods/x/file.txt" ;;
   *crash_monitor.exe)
     g=\$(dirname "\$1"); g=\$(dirname "\$(dirname "\$g")")
@@ -67,6 +67,7 @@ steam_cmd=("$T/bin/reaper" SteamLaunch AppId=1237970 -- "$T/bin/_v2-entry-point"
 install -m755 "$REPO/tf2vr-frame-launch" "$STATE/tf2vr-frame-launch"
 install -m755 "$REPO/install.sh" "$STATE/install.sh"
 install -m644 "$REPO/lib/tf2vr_frame.py" "$STATE/lib/tf2vr_frame.py"
+install -m644 "$REPO/lib/setup_progress.exe" "$STATE/lib/setup_progress.exe"
 S="$STATE/stage"
 mkdir -p "$S/mod/patches" "$S/mod/mods/Titanfall2VR.Cockpit" "$S/ns/R2Northstar/plugins"
 for f in asset_patcher.exe xr_probe.exe crash_monitor.exe Titanfall2VR.dll; do echo "$f" > "$S/mod/$f"; done
@@ -87,7 +88,7 @@ ok "-flat starts the normal game, without the -flat switch"
 
 # --- 2. first VR launch: setup job, finish, then VR ---------------------------------------------
 "$L" "${steam_cmd[@]}" +map sp_crashsite || fail "first launch exits 0"
-grep -q '^run |.*asset_patcher.exe |apply |Z:.*Titanfall2' "$CALLS" || fail "asset_patcher.exe runs through Steam's proton with the game folder"
+grep -q '^run |.*setup_progress.exe |Z:.*asset_patcher.log |Z:.*asset_patcher.exe |apply |Z:.*Titanfall2' "$CALLS" || fail "asset_patcher.exe runs through Steam's proton, under the progress window, with the game folder"
 [ ! -e "$STATE/setup-pending" ] || fail "setup-pending is cleared"
 [ -f "$GAME/TF2VR/mods/x/file.txt" ] && [ -f "$GAME/Titanfall2VRLauncher.exe" ] && [ -f "$GAME/TF2VR/plugins/Titanfall2VR.dll" ] \
   || fail "finish places the mod in the game folder"

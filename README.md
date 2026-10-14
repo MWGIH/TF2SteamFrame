@@ -51,7 +51,7 @@ It never closes Steam: on the Frame, Steam is the device's interface, and closin
 /home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
 ```
 
-**5. Play.** Put the headset on and press **Play** on Titanfall 2. The first launch builds the mod's game assets before anything appears, which takes a few minutes. After that, Play goes straight into VR.
+**5. Play.** Put the headset on and press **Play** on Titanfall 2. The first launch builds the mod's game assets first, which takes a few minutes: a small window shows a progress bar with the percentage done, and the game starts by itself when it reaches 100%. After that, Play goes straight into VR.
 
 To play without restarting, paste the line instead: the installer copies it to the clipboard and saves it in `~/.local/share/tf2vr-frame/launch-options.txt`. In desktop mode, open Steam, go to Titanfall 2 → gear icon → **Properties** → **General** → **Launch options** and press Ctrl+V. The restart job then sees it's already there and changes nothing.
 
@@ -178,6 +178,8 @@ The same approach also works on x86 SteamOS (Steam Deck) and desktop Linux with 
 python3 -m unittest discover -s tests   # Steam library discovery and the Titanfall2VR.dll patch
 bash tests/test_launch.sh               # the launch wrapper against a simulated Steam command and Proton
 ```
+
+`lib/setup_progress.exe` is the small Windows program that shows the first-launch progress bar. Its source is `tools/setup_progress/setup_progress.c`, and CI checks the committed `.exe` is exactly the build of that source (the build command is at the top of the file).
 
 ## AI disclosure
 

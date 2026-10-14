@@ -144,8 +144,13 @@ inner_setup() {
   [ -f "$stage/mod/asset_patcher.exe" ] || die "$stage is incomplete - run install.sh again."
   rm -rf "$stage/assets"
   log "Building the mod's game assets with asset_patcher.exe (first launch only, this can take a few minutes)..."
-  wrun run "$stage/mod/asset_patcher.exe" apply "$(win "$G")" "$(win "$stage/mod/patches")" "$(win "$stage/assets")" \
-    > "$LOG_DIR/asset_patcher.log" 2>&1
+  local -a patch=("$(win "$stage/mod/asset_patcher.exe")" apply "$(win "$G")" "$(win "$stage/mod/patches")" "$(win "$stage/assets")")
+  if [ -f "$STATE/lib/setup_progress.exe" ]; then
+    # Shows a progress bar with a percentage in place of asset_patcher.exe's raw "progress" lines
+    wrun run "$STATE/lib/setup_progress.exe" "$(win "$LOG_DIR/asset_patcher.log")" "${patch[@]}"
+  else
+    wrun run "$stage/mod/asset_patcher.exe" "${patch[@]:1}" > "$LOG_DIR/asset_patcher.log" 2>&1
+  fi
   local rc=$?
   log "asset_patcher.exe exited with code $rc (log: $LOG_DIR/asset_patcher.log)"
   end_session

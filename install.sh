@@ -267,6 +267,7 @@ install_launcher() {
   install -m755 "$HERE/tf2vr-frame-launch" "$LAUNCHER"
   install -m755 "$HERE/install.sh" "$STATE/install.sh"
   install -m644 "$HERE/lib/tf2vr_frame.py" "$STATE/lib/tf2vr_frame.py"
+  install -m644 "$HERE/lib/setup_progress.exe" "$STATE/lib/setup_progress.exe"
   [ -f "$CONF_DIR/mode" ] || echo vr > "$CONF_DIR/mode"
   printf '%q %%command%%\n' "$LAUNCHER" > "$STATE/launch-options.txt"
   ok "$LAUNCHER"
