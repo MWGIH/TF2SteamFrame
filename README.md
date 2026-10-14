@@ -55,7 +55,7 @@ It never closes Steam: on the Frame, Steam is the device's interface, and closin
 
 To play without restarting, paste the line instead: the installer copies it to the clipboard and saves it in `~/.local/share/tf2vr-frame/launch-options.txt`. In desktop mode, open Steam, go to Titanfall 2 → gear icon → **Properties** → **General** → **Launch options** and press Ctrl+V. The restart job then sees it's already there and changes nothing.
 
-Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder. You need an internet connection and about 1 GB of free space.
+Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder. You need an internet connection and about 4 GB of free space: the first launch builds about 3 GB of game files.
 
 Leave Titanfall 2's **Compatibility** setting on whatever Proton Steam picks. No custom Proton is needed.
 
@@ -110,7 +110,7 @@ First, collect a diagnostics report. Quit Titanfall 2, open Konsole, and paste:
 
 It prints the launch options Steam has saved, the restart job's log, which mod files are in place, and the end of every log from the last launch (launcher, asset builder, VR plugin, Northstar, crash monitor). The same report is saved to `~/tf2vr-frame-diagnostics.txt`; attach that file when asking for help or opening an issue.
 
-The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
+The launcher writes what it does to `~/.local/state/tf2vr-frame/launch.log`, and everything Steam, Proton and the game print to `output.log` in the same folder.
 
 | What you see | What to do |
 |---|---|
@@ -120,7 +120,7 @@ The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 | `install.sh`: `Titanfall 2 isn't installed in any Steam library` | Install it in Steam, or point at it: `./install.sh --game /path/to/Titanfall2`. |
 | `install.sh`: `Steam not found` | Run `STEAM_DIR=/path/to/Steam ./install.sh`. |
 | `install.sh`: `has no Wine prefix yet` | Start Titanfall 2 once normally from Steam (remove the launch options, or add `-flat`), sign in to the EA app, then quit. |
-| `Setting up the mod failed` after the first Play | See `~/.local/state/tf2vr-frame/asset_patcher.log`, run `./install.sh` again, and press Play again. |
+| `Setting up the mod failed` after the first Play | Run the diagnose command above; the reason is in the `launch.log` part. Most often the device ran out of space: the first launch needs about 4 GB free. Free some space, run `./install.sh` again, and press Play again. |
 | `couldn't apply the audio fix to Titanfall2VR.dll` | A new mod release changed the code this patches. Open an issue. |
 | The game says you're logged out of Origin, then quits | If the EA app's window asks you to sign in, do. Start the flat game once to check the EA app is signed in. |
 | Crash with code `0xC0000409` (3221226505) | The audio fix isn't in place: run `./install.sh --force`. |
@@ -128,7 +128,7 @@ The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 | `Another mod replaced DirectX files` | Remove `dxgi.dll` and `d3d11.dll` (ReShade and similar) from the game folder. |
 
 Logs worth attaching to an issue, collected after the game has closed:
-- `~/.local/state/tf2vr-frame/launch.log`
+- `~/.local/state/tf2vr-frame/launch.log` and `output.log`
 - `Titanfall2/TF2VR/plugins/Titanfall2VR-data/engine.txt`
 - the newest `Titanfall2/TF2VR/logs/nslog*.txt`
 - the newest folder in `Titanfall2/TF2VR/crashes/`
