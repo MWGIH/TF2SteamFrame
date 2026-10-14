@@ -10,7 +10,7 @@ The official installer only runs on Windows, and [tf2vr-linux](https://github.co
 
 > Made with AI assistance and a human in the loop; see [AI disclosure](#ai-disclosure).
 >
-> **Status: untested on real Steam Frame hardware.** The scripts are tested against a simulated Steam launch (see [Tests](#tests)), and the audio fix is checked against the current mod release (1.0.17). Whether the Frame's standalone mode runs Proton VR games well enough for Titanfall 2 is the open question; see [What isn't known yet](#what-isnt-known-yet). Reports welcome.
+> **Status: runs in VR on a Steam Frame; performance testing in progress.** Titanfall 2 VR starts and plays in full VR on a real Frame, but it is otherwise largely untested: it can be stuttery and soft-looking, and settings are still being worked out. See [What isn't known yet](#what-isnt-known-yet). For updates, keep an eye on the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam). Reports welcome.
 
 ## Based on
 
@@ -162,10 +162,10 @@ The patch is found by its pattern rather than at a fixed offset, writes the new 
 
 ## What isn't known yet
 
-These need someone with a Steam Frame to try:
+Performance testing is in progress; follow the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam) for updates.
 
-- **VR from Proton games in standalone mode.** The mod renders through OpenXR via Proton's `wineopenxr`, which on a PC talks to SteamVR. Whether the Frame provides that to Proton games running under FEX on the headset is up to Valve's Frame software. Because Steam starts the game here exactly as it starts any Proton VR game, whatever Valve supports for those applies to this one too.
-- **Performance.** Titanfall 2 plus the VR mod under x86 emulation on a mobile GPU may be too slow to be comfortable. The window size passed to the game can be changed with `TF2VR_FRAME_WIDTH` and `TF2VR_FRAME_HEIGHT` (default 1280×720, as on Windows).
+- **VR from Proton games in standalone mode** (confirmed on a Frame): the mod's OpenXR output reaches the headset through Proton's `wineopenxr`, and the game plays in full VR. It shows flat for a moment at startup before switching to the headset.
+- **Performance** (being tested): Titanfall 2 plus the VR mod runs under x86 emulation on a mobile GPU, and is currently a bit stuttery and soft-looking. The mod renders at the resolution SteamVR asks for, so sharpness follows SteamVR's render resolution setting (which can be set per game); raising it costs frame rate. Lowering the game's own Video settings (shadows, effects, ambient occlusion, model detail) eases the load. The EA app has to stay open, so the launcher gives it the lowest CPU priority while the game runs.
 - **How Steam starts the game on the Frame** (confirmed on a Frame): Steam starts Titanfall 2 through the EA app's link (`proton waitforexitandrun steam2ea://launchgame/1237970?...`) rather than `Titanfall2.exe`. The wrapper puts the game folder's `Titanfall2.exe` in the link's place and carries on as usual.
 - **The EA app on the Frame.** It has to install and sign in through Steam's normal first launch, as on any Linux device.
 
@@ -184,7 +184,7 @@ bash tests/test_launch.sh               # the launch wrapper against a simulated
 
 This repo was written with the help of AI (Anthropic's Claude), with a human in the loop. Martin ([MWGIH](https://github.com/MWGIH)) set the goals, directed the work and reviews every change before it's merged. The AI investigated the original projects, wrote the scripts, tests and documentation, and checked the audio fix against the mod's binary.
 
-It hasn't been tested on Steam Frame hardware yet (see [What isn't known yet](#what-isnt-known-yet)), so please report anything that doesn't work. The mod itself, Northstar and the projects in [Based on](#based-on) are their authors' own work.
+It runs in VR on Steam Frame hardware, but performance testing is still in progress (see [What isn't known yet](#what-isnt-known-yet)), so please report anything that doesn't work. The mod itself, Northstar and the projects in [Based on](#based-on) are their authors' own work.
 
 ## Credits
 
