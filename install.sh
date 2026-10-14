@@ -516,7 +516,13 @@ PY2
     for f in "$GAME"/{,bin/x64_retail/}{dxgi,d3d11}.dll; do [ -f "$f" ] && echo "  extra DirectX file: $f"; done
     echo "launch.json:"; head -c 1500 "$GAME/TF2VR/tools/launch.json" 2>/dev/null; echo
   fi
-  echo "launch.log (last 80 lines):"; tail -n 80 "$LOG_DIR/launch.log" 2>/dev/null || echo "  (none - Steam never ran the launcher)"
+  if [ -f "$LOG_DIR/launch.log" ]; then
+    # The game's own output goes to the same log; the launcher's lines start with [HH:MM:SS]
+    echo "launcher lines in launch.log (last 40):"; grep -E '^\[[0-9:]+\]' "$LOG_DIR/launch.log" | tail -n 40 | cut -c1-2000
+    echo "launch.log (last 30 lines):"; tail -n 30 "$LOG_DIR/launch.log"
+  else
+    echo "launch.log: (none - Steam never ran the launcher)"
+  fi
   echo "asset_patcher.log (last 15 lines):"; tail -n 15 "$LOG_DIR/asset_patcher.log" 2>/dev/null || echo "  (none)"
   if [ -n "${GAME:-}" ]; then
     local newest
