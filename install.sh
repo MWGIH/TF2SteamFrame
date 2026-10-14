@@ -8,6 +8,7 @@
 #   ./install.sh --uninstall   remove the mod files and the wrapper (campaign saves are kept)
 #   ./install.sh --game DIR    the folder with Titanfall2.exe, if it isn't found automatically
 #   ./install.sh --no-launch-options   never touch Steam's launch options
+#   ./install.sh --diagnose    print what's needed to debug the launch options (also saved to a file)
 #
 # Steam is never closed (on the Frame it is the device's shell). The installer prints the launch
 # options to paste into Steam; it only writes them itself when Steam isn't running.
@@ -46,6 +47,7 @@ while [ $# -gt 0 ]; do
     --check)     MODE=check ;;
     --uninstall) MODE=uninstall ;;
     --finish)    MODE=finish ;;
+    --diagnose)  MODE=diagnose ;;
     --force)     FORCE=1 ;;
     --beta)      CHANNEL=beta ;;
     --yes|-y)    ;;  # older versions closed Steam after asking; nothing to confirm any more
@@ -309,19 +311,26 @@ schedule_launch_options() {
   printf '%s\n%s\n%s\n' "$1" "$STEAM" "$LAUNCHER" > "$BOOT_DIR/pending"
   cat > "$UNIT_FILE" <<EOF
 [Unit]
-Description=Titanfall 2 VR: set Steam launch options before Steam starts
-# Steam must not be running while its config is edited; run before any Steam session starts
+Description=Titanfall 2 VR: set Steam launch options while Steam is closed
+# Steam must not be running while its config is edited. Try at login, before the Steam session
+# starts; and at shutdown, after Steam has exited and saved its own config.
 Before=gamescope-session.service gamescope-session-plus@steam.service graphical-session-pre.target graphical-session.target plasma-workspace.target
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=$BOOT_DIR/apply-launch-options.sh
+ExecStop=$BOOT_DIR/apply-launch-options.sh --after-steam-exits
+TimeoutStopSec=150
 
 [Install]
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload >/dev/null 2>&1 || true
   systemctl --user enable "$UNIT_NAME" >/dev/null 2>&1 || { rm -f "$UNIT_FILE" "$BOOT_DIR/pending"; return 1; }
+  # Start it now (Steam is running, so this changes nothing yet), so its stop step runs at this
+  # shutdown, once Steam has exited
+  systemctl --user start "$UNIT_NAME" >/dev/null 2>&1 || true
 }
 
 LAUNCH_OPTIONS_SET=0
@@ -459,6 +468,47 @@ uninstall() {
 }
 
 # ---------------------------------------------------------------- main --
+diagnose() {
+  set +e
+  local cfg
+  echo "== tf2vr-frame diagnostics $(date '+%F %T')"
+  echo "arch: $(uname -m)  os: $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null)"
+  echo "steam root: ${STEAM:-not found}   game: ${GAME:-not found}"
+  echo "steam processes:"; pgrep -a -x steam 2>/dev/null | cut -c1-200; pgrep -c steamwebhelper 2>/dev/null | sed 's/^/  steamwebhelper count: /'
+  echo "localconfig.vdf files and Titanfall 2 launch options:"
+  for cfg in "${STEAM:-/nonexistent}"/userdata/*/config/localconfig.vdf; do
+    [ -f "$cfg" ] || continue
+    echo "  $cfg ($(stat -c '%s bytes, modified %y' "$cfg"))"
+    python3 - "$cfg" <<'PY2'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+for m in re.finditer(r'"1237970"\s*\{', text):
+    depth, i = 1, m.end()
+    while depth and i < len(text):
+        depth += {"{": 1, "}": -1}.get(text[i], 0)
+        i += 1
+    block = text[m.start():i]
+    lo = re.search(r'"LaunchOptions"\s*"((?:[^"\\]|\\.)*)"', block)
+    print(f"    app block at offset {m.start()}: LaunchOptions = {lo.group(1) if lo else '(none)'}")
+PY2
+  done
+  echo "pending change: $( { cat "$BOOT_DIR/pending" 2>/dev/null || echo none; } | tr '\n' ' ')"
+  echo "service:"; systemctl --user status "$UNIT_NAME" --no-pager 2>&1 | head -n 12
+  echo "user services that look like the Steam session:"
+  systemctl --user list-units --all --no-pager --plain 2>/dev/null | grep -iE 'steam|gamescope|session' | cut -c1-120
+  echo "launch-options.log:"; tail -n 20 "$LOG_DIR/launch-options.log" 2>/dev/null || echo "  (none)"
+  echo "journal for the service (this boot):"
+  journalctl --user -b -u "$UNIT_NAME" --no-pager 2>/dev/null | tail -n 20
+}
+
+if [ "$MODE" = diagnose ]; then
+  discover
+  diagnose 2>&1 | tee "$HOME/tf2vr-frame-diagnostics.txt"
+  echo
+  echo "Saved to $HOME/tf2vr-frame-diagnostics.txt"
+  exit 0
+fi
+
 if [ "$MODE" = finish ]; then
   GAME=$OPT_GAME
   finish
@@ -501,7 +551,7 @@ if [ "$MODE" = install ]; then
     copy_to_clipboard "$line" || true
     cat <<EOF
 Last step: restart the device (Steam menu -> Power -> Restart).
-Titanfall 2's launch options are set automatically during the restart, before Steam starts.
+Titanfall 2's launch options are set automatically during the restart, while Steam is closed.
 Then put your headset on and press Play on Titanfall 2.
 
 To play without restarting, paste this into Titanfall 2 -> gear icon -> Properties -> General ->

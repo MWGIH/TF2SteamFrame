@@ -44,7 +44,7 @@ The command:
 - copies Microsoft's VC++ runtime into the game's prefix and applies the audio fix,
 - arranges for Titanfall 2's launch options to be set automatically.
 
-It never closes Steam: on the Frame, Steam is the device's interface, and closing it ends your session. Steam also overwrites its settings file whenever it saves, so launch options can't be written while it runs. Instead, the installer leaves a small one-time job that sets them at the next restart, before Steam starts.
+It never closes Steam: on the Frame, Steam is the device's interface, and closing it ends your session. Steam also overwrites its settings file whenever it saves, so launch options can't be written while it runs. Instead, the installer leaves a small one-time job that sets them during the next restart, in the moment Steam is closed: as the device shuts down after Steam has exited, or as it starts up before Steam does.
 
 **4. Restart the Frame.** Steam menu → **Power** → **Restart**. Titanfall 2's launch options are set during the restart. You can check them afterwards in Titanfall 2 → gear icon → **Properties** → **General** → **Launch options**: they look like this, with your own home folder:
 ```
@@ -106,7 +106,7 @@ The launcher writes everything to `~/.local/state/tf2vr-frame/launch.log`.
 
 | What you see | What to do |
 |---|---|
-| The game still starts flat after restarting | See `~/.local/state/tf2vr-frame/launch-options.log`. If it says Steam was already running, the restart job ran too late on your device: paste the launch options instead, as described after step 5 of the install. |
+| The game still starts flat after restarting | Run `~/TF2SteamFrame/install.sh --diagnose` and send the file it saves (`~/tf2vr-frame-diagnostics.txt`). Meanwhile, paste the launch options as described after step 5 of the install. |
 | The game starts flat | Check the launch options are exactly what `install.sh` printed, and that `~/.config/tf2vr-frame/mode` doesn't say `flat`. |
 | Titanfall 2 doesn't start at all | Look at the end of `launch.log`. If it's unreadable, remove the launch options to get the normal game back. |
 | `install.sh`: `Titanfall 2 isn't installed in any Steam library` | Install it in Steam, or point at it: `./install.sh --game /path/to/Titanfall2`. |
