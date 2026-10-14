@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/MWGIH/TF2SteamFrame/main/setup.sh | bash
 #
 # Downloads (or updates) this repo in ~/TF2SteamFrame, then runs install.sh, which installs the mod
-# and prints the launch options to paste into Steam. Run the same command again to update.
+# and sets Titanfall 2's launch options at the next restart. Run the same command again to update.
 # Options for install.sh go after `bash -s --`, e.g.  ... | bash -s -- --beta
 set -euo pipefail
 

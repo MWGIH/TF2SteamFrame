@@ -295,18 +295,55 @@ copy_to_clipboard() {
   return 1
 }
 
+BOOT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/tf2vr-frame-steamconfig"
+UNIT_NAME=tf2vr-frame-launch-options.service
+UNIT_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$UNIT_NAME"
+
+# schedule_launch_options <set|clear>: have lib/apply-launch-options.sh make the change at the next
+# login, before the Steam session starts, through a systemd user service. Returns 1 if it can't.
+schedule_launch_options() {
+  command -v systemctl >/dev/null 2>&1 || return 1
+  mkdir -p "$BOOT_DIR" "$(dirname "$UNIT_FILE")"
+  install -m755 "$HERE/lib/apply-launch-options.sh" "$BOOT_DIR/apply-launch-options.sh"
+  install -m644 "$HERE/lib/tf2vr_frame.py" "$BOOT_DIR/tf2vr_frame.py"
+  printf '%s\n%s\n%s\n' "$1" "$STEAM" "$LAUNCHER" > "$BOOT_DIR/pending"
+  cat > "$UNIT_FILE" <<EOF
+[Unit]
+Description=Titanfall 2 VR: set Steam launch options before Steam starts
+# Steam must not be running while its config is edited; run before any Steam session starts
+Before=gamescope-session.service gamescope-session-plus@steam.service graphical-session-pre.target graphical-session.target plasma-workspace.target
+
+[Service]
+Type=oneshot
+ExecStart=$BOOT_DIR/apply-launch-options.sh
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  systemctl --user enable "$UNIT_NAME" >/dev/null 2>&1 || { rm -f "$UNIT_FILE" "$BOOT_DIR/pending"; return 1; }
+}
+
 LAUNCH_OPTIONS_SET=0
+LAUNCH_OPTIONS_PENDING=0
 set_launch_options() {
   echo
   echo "Steam launch options:"
   [ "$LAUNCH_OPTIONS" = 1 ] || { ok "left alone (--no-launch-options)"; return; }
   if steam_running; then
-    ok "Steam is running, so set them in Steam (see below)"
+    # Never close Steam: on the Frame it is the device's shell
+    if schedule_launch_options set; then
+      LAUNCH_OPTIONS_PENDING=1
+      ok "Steam is running, so they'll be set automatically the next time the device restarts"
+    else
+      warn "Steam is running and can't be closed - paste the launch options into Steam (see below)"
+    fi
     return
   fi
   local changed
   if changed=$(helper set-launch-options "$STEAM" "$LAUNCHER"); then
     LAUNCH_OPTIONS_SET=1
+    rm -f "$BOOT_DIR/pending"
     if [ -n "$changed" ]; then ok "launch options set ($(wc -l <<<"$changed") Steam account(s))"
     else ok "launch options already set"
     fi
@@ -315,13 +352,29 @@ set_launch_options() {
   fi
 }
 
+# Uninstalling while Steam runs: leave a launcher that just starts the game, so Titanfall 2 keeps
+# working until the launch options are cleared at the next restart.
+PASSTHROUGH='#!/bin/sh
+# Titanfall 2 VR was uninstalled: start the game normally until its launch options are cleared.
+exec "$@"
+'
+
 clear_launch_options() {
   [ -n "$STEAM" ] || return 0
-  if ! steam_running && helper clear-launch-options "$STEAM" "$LAUNCHER" >/dev/null; then
-    ok "removed the launcher from Titanfall 2's launch options"
-  else
-    warn "In Steam, remove '$LAUNCHER %command%' from Titanfall 2 -> Properties -> General -> Launch options, or the game won't start"
+  if ! steam_running; then
+    if helper clear-launch-options "$STEAM" "$LAUNCHER" >/dev/null; then
+      ok "removed the launcher from Titanfall 2's launch options"
+      systemctl --user disable "$UNIT_NAME" >/dev/null 2>&1 || true
+      rm -rf "$BOOT_DIR" "$UNIT_FILE"
+      return 0
+    fi
+  elif schedule_launch_options clear; then
+    KEEP_PASSTHROUGH=1
+    ok "Titanfall 2's launch options will be cleared the next time the device restarts (the game starts normally until then)"
+    return 0
   fi
+  KEEP_PASSTHROUGH=1
+  warn "In Steam, remove '$LAUNCHER %command%' from Titanfall 2 -> Properties -> General -> Launch options (the game starts normally until then)"
 }
 
 # --------------------------------------------------------------- finish --
@@ -393,8 +446,14 @@ uninstall() {
     done < "$STATE/files.txt"
     ok "removed $n mod files from $game"
   fi
+  KEEP_PASSTHROUGH=0
   clear_launch_options
   rm -rf "$STATE" "$CONF_DIR"
+  if [ "$KEEP_PASSTHROUGH" = 1 ]; then
+    mkdir -p "$STATE"
+    printf '%s' "$PASSTHROUGH" > "$LAUNCHER"
+    chmod 755 "$LAUNCHER"
+  fi
   ok "removed the launch wrapper"
   echo "  Kept: campaign saves (in the Wine prefix), the VC++ runtime in the prefix, and Northstar logs under $game/TF2VR"
 }
@@ -437,6 +496,20 @@ if [ "$MODE" = install ]; then
   echo
   if [ "$LAUNCH_OPTIONS_SET" = 1 ]; then
     echo "All set. Put your headset on and press Play on Titanfall 2 in Steam."
+  elif [ "$LAUNCH_OPTIONS_PENDING" = 1 ]; then
+    line=$(cat "$STATE/launch-options.txt")
+    copy_to_clipboard "$line" || true
+    cat <<EOF
+Last step: restart the device (Steam menu -> Power -> Restart).
+Titanfall 2's launch options are set automatically during the restart, before Steam starts.
+Then put your headset on and press Play on Titanfall 2.
+
+To play without restarting, paste this into Titanfall 2 -> gear icon -> Properties -> General ->
+Launch options instead (it's on the clipboard, and saved in $STATE/launch-options.txt):
+
+    $line
+
+EOF
   else
     line=$(cat "$STATE/launch-options.txt")
     copied=""
