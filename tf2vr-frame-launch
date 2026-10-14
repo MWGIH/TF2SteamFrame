@@ -107,6 +107,9 @@ prefix_pids() {
   proton_dir="$(readlink -f "$(dirname "$PROTON")")/"
   pfx_canon=$(readlink -f "$pfx")
   for p in /proc/[0-9]*; do
+    # only Wine's own processes are worth a closer look (see args2 for why this matters)
+    args2 "$p" || continue
+    case "${ARGS2,,}" in *.exe*|*wine*) ;; *) continue ;; esac
     t=$p
     if ! exe=$(readlink "$p/exe" 2>/dev/null); then
       for t in "$p"/task/*; do exe=$(readlink "$t/exe" 2>/dev/null) && break; done
@@ -122,7 +125,8 @@ kill_orphans() {
   pids=$(prefix_pids)
   [ -n "$pids" ] || return 1
   for p in $pids; do
-    case "$(tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | head -n 2)" in *wineserver*) return 1 ;; esac
+    args2 "/proc/$p" || continue
+    case "$ARGS2" in *wineserver*) return 1 ;; esac
   done
   # shellcheck disable=SC2086
   kill -KILL $pids 2>/dev/null
@@ -162,7 +166,7 @@ inner_setup() {
     # `proton run` can return at once (it does on the Steam Frame) or keep waiting on other Wine
     # processes of the session, so follow the programs and the log instead. Done when the log's
     # last line is there; failed when neither program has been running for a while.
-    local gone=0 t=0
+    local gone=0 t=0 start=$SECONDS logged=0
     while :; do
       grep -q '^asset_patcher exit code' "$plog" 2>/dev/null && break
       if win_running setup_progress.exe || win_running asset_patcher.exe; then gone=0
@@ -170,7 +174,8 @@ inner_setup() {
       fi
       # allow time for Wine to start the program; then a short grace for the log's last write
       if [ "$t" -ge 60 ] && [ "$gone" -ge 5 ] && ! kill -0 "$pid" 2>/dev/null; then break; fi
-      sleep 2; t=$((t + 2))
+      sleep 2; t=$((SECONDS - start))
+      if [ $((t / 60)) -gt "$logged" ]; then logged=$((t / 60)); log "still building ($logged min)"; fi
     done
     rc=$(sed -n 's/^asset_patcher exit code \([0-9]*\).*/\1/p' "$plog" 2>/dev/null | tail -n 1)
     if [ -n "$rc" ]; then
@@ -193,10 +198,20 @@ inner_setup() {
   return 0
 }
 
+# The first two arguments of process $1 (a /proc/PID folder) in ARGS2, one per line. Reads them
+# without starting any program: under the Steam runtime on the Frame every new process loads
+# preloaded libraries, which made scanning /proc with tr/head for each process very slow.
+args2() {
+  local -a a=()
+  mapfile -d '' -n 2 -t a 2>/dev/null < "$1/cmdline" || return 1
+  ARGS2="${a[0]:-}"$'\n'"${a[1]:-}"
+}
+
 ea_running() {
   local p
   for p in /proc/[0-9]*; do
-    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
+    args2 "$p" || continue
+    case "$ARGS2" in
       *'\EADesktop.exe'*) return 0 ;;
     esac
   done
@@ -205,10 +220,10 @@ ea_running() {
 
 # Is a Windows program of this name running? Wine processes show their Windows path in argv.
 win_running() {
-  local p name
-  name=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  local p name=${1,,}
   for p in /proc/[0-9]*; do
-    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2 | tr '[:upper:]' '[:lower:]')" in
+    args2 "$p" || continue
+    case "${ARGS2,,}" in
       *[\\/]"$name"*) return 0 ;;
     esac
   done
@@ -218,7 +233,8 @@ win_running() {
 monitor_running() {
   local p
   for p in /proc/[0-9]*; do
-    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
+    args2 "$p" || continue
+    case "$ARGS2" in
       *[A-Za-z]:\\*\\crash_monitor.exe*) return 0 ;;
     esac
   done
