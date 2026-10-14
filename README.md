@@ -167,7 +167,7 @@ These need someone with a Steam Frame to try:
 
 - **VR from Proton games in standalone mode.** The mod renders through OpenXR via Proton's `wineopenxr`, which on a PC talks to SteamVR. Whether the Frame provides that to Proton games running under FEX on the headset is up to Valve's Frame software. Because Steam starts the game here exactly as it starts any Proton VR game, whatever Valve supports for those applies to this one too.
 - **Performance.** Titanfall 2 plus the VR mod under x86 emulation on a mobile GPU may be too slow to be comfortable. The window size passed to the game can be changed with `TF2VR_FRAME_WIDTH` and `TF2VR_FRAME_HEIGHT` (default 1280×720, as on Windows).
-- **The exact command line Steam builds on the Frame.** The wrapper looks for `Titanfall2.exe` and the `proton` script in it, and falls back to whatever follows the last `--`. If it finds neither, it starts the game unchanged and says so in `launch.log`; that log line is what's needed to adapt it.
+- **How Steam starts the game on the Frame** (confirmed on a Frame): Steam starts Titanfall 2 through the EA app's link (`proton waitforexitandrun steam2ea://launchgame/1237970?...`) rather than `Titanfall2.exe`. The wrapper puts the game folder's `Titanfall2.exe` in the link's place and carries on as usual.
 - **The EA app on the Frame.** It has to install and sign in through Steam's normal first launch, as on any Linux device.
 
 The same approach also works on x86 SteamOS (Steam Deck) and desktop Linux with Steam, which is a good way to test changes without a Frame.

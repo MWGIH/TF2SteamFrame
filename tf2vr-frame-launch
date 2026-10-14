@@ -272,7 +272,7 @@ outer() {
   log "---- Steam launch: $*"
 
   local -a cmd=("$@") tail_args=()
-  local mode i exe_i=-1 runner_i=-1 flat=0
+  local mode i exe_i=-1 url_i=-1 runner_i=-1 flat=0 game
   mode=$(tr -d '[:space:]' < "$CONF_DIR/mode" 2>/dev/null)
   [ "${TF2VR_FRAME_MODE:-}" = flat ] && mode=flat
 
@@ -285,12 +285,20 @@ outer() {
         titanfall2.exe) exe_i=$i ;;
       esac
     fi
+    # Steam can also start the game through the EA app's link instead of Titanfall2.exe (it does on
+    # the Steam Frame): .../proton waitforexitandrun steam2ea://launchgame/1237970?platform=steam&...
+    if [ "$url_i" -lt 0 ]; then
+      case "${cmd[$i]}" in
+        steam2ea://*|link2ea://*|origin2://*) url_i=$i ;;
+      esac
+    fi
   done
+  [ "$exe_i" -ge 0 ] && url_i=-1
   # Drop our own -flat switch so the game never sees it
   if [ "$flat" = 1 ]; then
     local -a clean=()
     for i in "${!cmd[@]}"; do
-      case "${cmd[$i]}" in -flat|--flat) [ "$i" -lt "$exe_i" ] || continue ;; esac
+      case "${cmd[$i]}" in -flat|--flat) [ "$i" -lt "$((exe_i > url_i ? exe_i : url_i))" ] || continue ;; esac
       clean+=("${cmd[$i]}")
     done
     cmd=("${clean[@]}")
@@ -300,8 +308,21 @@ outer() {
     log "Flat mode: starting the normal game."
     exec "${cmd[@]}"
   fi
+  if [ "$exe_i" -lt 0 ] && [ "$url_i" -ge 0 ]; then
+    # Run the game folder's Titanfall2.exe in the link's place: Proton tells us where the game is,
+    # else look in Steam's libraries as install.sh does
+    game=${STEAM_COMPAT_INSTALL_PATH:-}
+    if [ ! -f "$game/Titanfall2.exe" ]; then
+      game=$(GAME="" && eval "$(python3 "$HELPER" find-game 2>/dev/null)" && printf '%s' "$GAME")
+    fi
+    if [ -n "$game" ] && [ -f "$game/Titanfall2.exe" ]; then
+      log "Steam starts the game through the EA app link ${cmd[$url_i]}; using $game/Titanfall2.exe in its place."
+      cmd[url_i]="$game/Titanfall2.exe"
+      exe_i=$url_i
+    fi
+  fi
   if [ "$exe_i" -lt 0 ]; then
-    log "ERROR: Titanfall2.exe isn't in Steam's command line, so VR can't be started. Starting it unchanged."
+    log "ERROR: neither Titanfall2.exe nor the EA app link is in Steam's command line (or the game folder wasn't found), so VR can't be started. Starting it unchanged."
     exec "${cmd[@]}"
   fi
 
