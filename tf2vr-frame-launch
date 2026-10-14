@@ -178,9 +178,7 @@ inner_setup() {
       if [ $((t / 60)) -gt "$logged" ]; then logged=$((t / 60)); log "still building ($logged min)"; fi
     done
     rc=$(sed -n 's/^asset_patcher exit code \([0-9]*\).*/\1/p' "$plog" 2>/dev/null | tail -n 1)
-    if [ -n "$rc" ]; then
-      sleep 2   # leave "Done" on screen for a moment
-    else
+    if [ -z "$rc" ]; then
       log "WARNING: the asset build ended without reporting a result."
       rc=unknown
     fi
@@ -216,6 +214,23 @@ ea_running() {
     esac
   done
   return 1
+}
+
+# Give the EA app's processes (all their threads: Linux priority is per thread) the lowest CPU
+# priority, so the game gets the CPU time first. Returns 0 if it found any.
+ea_background() {
+  local p t
+  local -a tids=()
+  for p in /proc/[0-9]*; do
+    args2 "$p" || continue
+    case "${ARGS2,,}" in
+      *'\electronic arts'*|*'\ea desktop'*|*eadesktop.exe*|*eabackgroundservice.exe*|*ealocalhostsvc.exe*|*qtwebengineprocess.exe*)
+        for t in "$p"/task/[0-9]*; do tids+=("${t##*/}"); done ;;
+    esac
+  done
+  [ "${#tids[@]}" -gt 0 ] || return 1
+  renice -n 19 -p "${tids[@]}" >/dev/null 2>&1
+  return 0
 }
 
 # Is a Windows program of this name running? Wine processes show their Windows path in argv.
@@ -318,7 +333,13 @@ inner_vr() {
     sleep 1
   done
   if [ "$seen" = 1 ]; then
-    while monitor_running; do sleep 2; done
+    # The EA app only has to stay open in the background; under FEX it takes CPU time from the game
+    local n=0
+    while monitor_running; do
+      n=$((n + 1))
+      [ "$n" = 10 ] && ea_background && log "Lowered the EA app's CPU priority while the game runs."
+      sleep 2
+    done
   elif kill -0 "$proton_pid" 2>/dev/null; then
     log "WARNING: couldn't find crash_monitor.exe, so this can't tell when the game ends."
     wait "$proton_pid" 2>/dev/null
