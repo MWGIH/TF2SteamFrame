@@ -82,13 +82,18 @@ wrun() {
 end_session() {
   local ws
   [ -n "$PROTON" ] || return 0
-  for ws in "$(dirname "$PROTON")/files/bin/wineserver" "$(dirname "$PROTON")/dist/bin/wineserver"; do
-    if [ -x "$ws" ]; then
-      WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" "$ws" -k 2>/dev/null
+  # files/bin on current Proton, dist/bin on old ones; look further for other layouts (ARM64 builds)
+  for ws in "$(dirname "$PROTON")/files/bin/wineserver" "$(dirname "$PROTON")/dist/bin/wineserver" \
+            "$(find "$(dirname "$PROTON")" -maxdepth 4 -name wineserver -type f -perm -u+x 2>/dev/null | head -n 1)"; do
+    if [ -n "$ws" ] && [ -x "$ws" ]; then
+      WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx" timeout 20 "$ws" -k 2>/dev/null
       break
     fi
   done
-  kill_orphans || true
+  [ -n "$ws" ] && [ -x "$ws" ] || log "WARNING: couldn't find Proton's wineserver to end the Wine session."
+  sleep 1
+  kill_orphans && log "Closed Wine processes left over from the session."
+  return 0
 }
 
 # Wine processes of this prefix (their binaries live in Proton's folder, and Proton gives them
@@ -144,11 +149,45 @@ inner_setup() {
   [ -f "$stage/mod/asset_patcher.exe" ] || die "$stage is incomplete - run install.sh again."
   rm -rf "$stage/assets"
   log "Building the mod's game assets with asset_patcher.exe (first launch only, this can take a few minutes)..."
-  wrun run "$stage/mod/asset_patcher.exe" apply "$(win "$G")" "$(win "$stage/mod/patches")" "$(win "$stage/assets")" \
-    > "$LOG_DIR/asset_patcher.log" 2>&1
-  local rc=$?
-  log "asset_patcher.exe exited with code $rc (log: $LOG_DIR/asset_patcher.log)"
+  local -a patch=("$(win "$stage/mod/asset_patcher.exe")" apply "$(win "$G")" "$(win "$stage/mod/patches")" "$(win "$stage/assets")")
+  local rc pid plog="$LOG_DIR/asset_patcher.log"
+  rm -f "$plog"
+  if [ -f "$STATE/lib/setup_progress.exe" ]; then
+    # Shows a progress bar with a percentage in place of asset_patcher.exe's raw "progress" lines,
+    # and writes "asset_patcher exit code N" as the log's last line when the build ends.
+    wrun run "$STATE/lib/setup_progress.exe" "$(win "$plog")" "${patch[@]}" &
+    pid=$!
+    # `proton run` can return at once (it does on the Steam Frame) or keep waiting on other Wine
+    # processes of the session, so follow the programs and the log instead. Done when the log's
+    # last line is there; failed when neither program has been running for a while.
+    local gone=0 t=0
+    while :; do
+      grep -q '^asset_patcher exit code' "$plog" 2>/dev/null && break
+      if win_running setup_progress.exe || win_running asset_patcher.exe; then gone=0
+      else gone=$((gone + 1))
+      fi
+      # allow time for Wine to start the program; then a short grace for the log's last write
+      if [ "$t" -ge 60 ] && [ "$gone" -ge 5 ] && ! kill -0 "$pid" 2>/dev/null; then break; fi
+      sleep 2; t=$((t + 2))
+    done
+    rc=$(sed -n 's/^asset_patcher exit code \([0-9]*\).*/\1/p' "$plog" 2>/dev/null | tail -n 1)
+    if [ -n "$rc" ]; then
+      sleep 2   # leave "Done" on screen for a moment
+    else
+      log "WARNING: the asset build ended without reporting a result."
+      rc=unknown
+    fi
+  else
+    wrun run "$stage/mod/asset_patcher.exe" "${patch[@]:1}" > "$plog" 2>&1
+    rc=$?
+  fi
+  log "asset_patcher.exe exited with code $rc (log: $plog)"
   end_session
+  if [ -n "${pid:-}" ]; then
+    kill "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+  fi
+  log "Setup session ended."
   return 0
 }
 
@@ -157,6 +196,18 @@ ea_running() {
   for p in /proc/[0-9]*; do
     case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2)" in
       *'\EADesktop.exe'*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Is a Windows program of this name running? Wine processes show their Windows path in argv.
+win_running() {
+  local p name
+  name=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  for p in /proc/[0-9]*; do
+    case "$(tr '\0' '\n' 2>/dev/null < "$p/cmdline" | head -n 2 | tr '[:upper:]' '[:lower:]')" in
+      *[\\/]"$name"*) return 0 ;;
     esac
   done
   return 1
@@ -242,10 +293,10 @@ inner_vr() {
   local proton_pid=$!
 
   # `proton run` keeps waiting while the EA app is open, so follow crash_monitor.exe instead
+  # (it can also return before the program has even started, as on the Steam Frame)
   local seen=0
   for _ in $(seq 1 120); do
     monitor_running && { seen=1; break; }
-    kill -0 "$proton_pid" 2>/dev/null || break
     sleep 1
   done
   if [ "$seen" = 1 ]; then
