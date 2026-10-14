@@ -14,6 +14,7 @@ Steam Frame (ARM64 SteamOS), on x86 SteamOS and inside Steam's container runtime
     tf2vr_frame.py split-cabs EXE DIR            cut the cabinets out of vc_redist.x64.exe
     tf2vr_frame.py set-launch-options STEAM WRAPPER    put the wrapper in Titanfall 2's launch options
     tf2vr_frame.py clear-launch-options STEAM WRAPPER  take it out again
+    tf2vr_frame.py check-launch-options STEAM WRAPPER  exit 0 if it's already in for every account
 """
 import hashlib
 import json
@@ -539,6 +540,25 @@ def cmd_set_launch_options(args):
     return 0
 
 
+def launch_options_set(steam, wrapper):
+    """True if every Steam account's Titanfall 2 launch options already run the wrapper."""
+    paths = localconfigs(steam)
+    for path in paths:
+        with open(path, encoding="utf-8", errors="surrogateescape") as fh:
+            node = vdf_child(vdf_load_raw(fh.read()), "UserLocalConfigStore")
+        for key in ("Software", "Valve", "Steam", "apps", APPID):
+            node = vdf_child(node, key) if node is not None else None
+        entry = next((e for e in node or [] if e[0].lower() == "launchoptions" and not isinstance(e[1], list)), None)
+        if entry is None or wrapper not in vdf_unescape(entry[1]):
+            return False
+    return bool(paths)
+
+
+def cmd_check_launch_options(args):
+    steam, wrapper = args
+    return 0 if launch_options_set(steam, wrapper) else 1
+
+
 def cmd_clear_launch_options(args):
     steam, wrapper = args
     for path in edit_launch_options(steam, wrapper, without_wrapper):
@@ -574,6 +594,7 @@ COMMANDS = {
     "extract": cmd_extract,
     "set-launch-options": cmd_set_launch_options,
     "clear-launch-options": cmd_clear_launch_options,
+    "check-launch-options": cmd_check_launch_options,
 }
 
 
