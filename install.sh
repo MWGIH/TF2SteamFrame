@@ -244,7 +244,8 @@ print(t["version"], t["url"], t["sha256"], m["installer"]["commit"])' <<<"$manif
     ok "up to date ($WANTED)"
     return 1
   fi
-  if [ "$FORCE" = 0 ] && [ -f "$STATE/setup-pending" ] && [ "$(cat "$STATE/stage/version" 2>/dev/null)" = "$WANTED" ]; then
+  if [ "$FORCE" = 0 ] && [ -f "$STATE/setup-pending" ] && [ "$(cat "$STATE/stage/version" 2>/dev/null)" = "$WANTED" ] \
+     && stage_complete; then
     ok "$WANTED is downloaded and waiting for the first launch from Steam"
     return 0
   fi
@@ -269,8 +270,18 @@ print(t["version"], t["url"], t["sha256"], m["installer"]["commit"])' <<<"$manif
   state=$(helper patch-loopback "$stage/mod/Titanfall2VR.dll") \
     || die "couldn't apply the audio fix to Titanfall2VR.dll $mod_version ($state). This mod version needs an update to these scripts; please open an issue."
   ok "audio fix applied to Titanfall2VR.dll (loopback capture -> default output device)"
+  (cd "$stage" && find mod ns -type f) > "$stage/files.lst"
   printf '%s\n' "$WANTED" > "$stage/version"
   return 0
+}
+
+# Every downloaded file is still in the stage (an older version moved them out one by one)
+stage_complete() {
+  local f
+  [ -f "$STATE/stage/files.lst" ] || return 1
+  while IFS= read -r f; do
+    [ -f "$STATE/stage/$f" ] || return 1
+  done < "$STATE/stage/files.lst"
 }
 
 install_launcher() {
@@ -408,12 +419,13 @@ clear_launch_options() {
 
 # --------------------------------------------------------------- finish --
 # place <source file> <path relative to the game folder>
-# Files are moved out of the stage, not copied: the stage is deleted afterwards anyway, and a copy
-# needs as much free space again as the assets take (about 3 GB).
+# Files are hard-linked from the stage into the game folder rather than copied: a copy needs as
+# much free space again as the assets take (about 3 GB). The stage stays whole until the end, so
+# an attempt that stops part way can simply be run again. (A game on another drive gets copies.)
 place() {
   mkdir -p "$(dirname "$GAME/$2")" \
     && rm -f "$GAME/$2" \
-    && mv -f "$1" "$GAME/$2" \
+    && { ln "$1" "$GAME/$2" 2>/dev/null || cp -f "$1" "$GAME/$2"; } \
     || die "couldn't put $2 into $GAME. Free space: $(df -h --output=avail "$GAME" 2>/dev/null | tail -n 1 | tr -d ' ')"
   printf '%s\n' "$2" >> "$FILES"
 }
@@ -584,14 +596,20 @@ fi
 discover
 preflight
 
+# Changing the install while Steam is starting the game (or building its assets on the first
+# launch) pulls files out from under it
+game_running() {
+  pgrep -f '[\\/](Titanfall2|Titanfall2VRLauncher|EADesktop|asset_patcher|setup_progress)\.exe|tf2vr-frame-launch --inner' >/dev/null
+}
+
 case "$MODE" in
   check) ;;
-  uninstall) uninstall ;;
+  uninstall)
+    game_running && die "Titanfall 2 is running or still setting up - quit it in Steam first (Steam button -> Exit game), then run this again"
+    uninstall ;;
   install)
     [ "$fails" = 0 ] || die "fix the failed checks above first"
-    if pgrep -f '[\\/](Titanfall2|Titanfall2VRLauncher|EADesktop)\.exe' >/dev/null; then
-      die "Titanfall 2 or the EA app is running - close them first"
-    fi
+    game_running && die "Titanfall 2 is running or still setting up - quit it in Steam first (Steam button -> Exit game), then run this again"
     ensure_vcredist
     install_launcher
     if stage_mod; then
