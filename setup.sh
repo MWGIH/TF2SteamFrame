@@ -12,7 +12,7 @@ REPO=${TF2SF_REPO:-https://github.com/MWGIH/TF2SteamFrame}
 BRANCH=${TF2SF_BRANCH:-main}
 DIR=${TF2SF_DIR:-$HOME/TF2SteamFrame}
 
-echo "Titanfall 2 VR for the Steam Frame"
+echo "Titanfall 2 VR for the Steam Frame and Steam Machine"
 echo "Getting the installer into $DIR..."
 if command -v git >/dev/null 2>&1; then
   if [ -d "$DIR/.git" ]; then

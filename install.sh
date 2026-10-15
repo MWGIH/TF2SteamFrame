@@ -113,6 +113,13 @@ preflight() {
   if [ -n "$STEAM" ]; then ok "Steam: $STEAM"
   else fail "Steam not found - run with STEAM_DIR=/path/to/Steam"
   fi
+  # On a Steam Machine or PC the game streams to the headset through SteamVR, which Steam doesn't
+  # install by default (on the Frame, VR is built in)
+  if [ "$arch" = x86_64 ] && [ -n "$STEAM" ]; then
+    if helper has-steamvr "$STEAM"; then ok "SteamVR installed"
+    else warn "SteamVR isn't installed. To stream VR to the Steam Frame from this device, install SteamVR from Steam's Store (it's free), then start it before you play"
+    fi
+  fi
   if [ -n "$GAME" ] && [ -f "$GAME/Titanfall2.exe" ]; then
     ok "Titanfall 2: $GAME"
   elif [ -n "$GAME" ]; then

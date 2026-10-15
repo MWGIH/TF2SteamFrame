@@ -245,6 +245,17 @@ win_running() {
   return 1
 }
 
+steamvr_running() {
+  local p
+  for p in /proc/[0-9]*; do
+    args2 "$p" || continue
+    case "$ARGS2" in
+      */vrserver*|*/vrcompositor*|*/vrmonitor*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 monitor_running() {
   local p
   for p in /proc/[0-9]*; do
@@ -448,6 +459,9 @@ outer() {
     fi
   fi
 
+  # Steam doesn't start SteamVR for Titanfall 2 (it isn't a VR game in Steam's eyes). On a PC or
+  # Steam Machine streaming to a headset, SteamVR has to be running already, or the mod can't reach it.
+  steamvr_running || log "WARNING: SteamVR isn't running. On a PC or Steam Machine, connect the headset and start SteamVR before pressing Play."
   exec "${pre[@]}" "$SELF" --inner vr "${#runner[@]}" "${runner[@]}" "$exe" "${tail_args[@]}"
 }
 
