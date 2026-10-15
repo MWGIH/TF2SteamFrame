@@ -330,9 +330,15 @@ inner_vr() {
   mapfile -t args < <(python3 "$HELPER" launch-args "$G/TF2VR/tools/launch.json")
   [ "${#args[@]}" -gt 0 ] || die "Couldn't read $G/TF2VR/tools/launch.json"
 
+  # The mod draws both eyes, then copies a frame to the game's own window. If that copy waits for
+  # the TV's or the Frame's flat-screen vsync, every VR frame waits with it, so turn vsync off for
+  # the game window, as the mod's own launch.json asks (mat_vsync_mode 0). Launch options win.
+  local dxvk_config=${DXVK_CONFIG:-dxgi.syncInterval = 0} present_mode=${MESA_VK_WSI_PRESENT_MODE:-immediate}
+  log "Game window without vsync: DXVK_CONFIG=$dxvk_config MESA_VK_WSI_PRESENT_MODE=$present_mode"
+
   log "Launching Titanfall 2 VR from $G"
   cd "$G" || die "can't enter $G"
-  ContentId=$STEAM_OFFER wrun run "$G/TF2VR/tools/crash_monitor.exe" "$(win "$G/TF2VR")" "$(win "$G/Titanfall2VRLauncher.exe")" \
+  DXVK_CONFIG=$dxvk_config MESA_VK_WSI_PRESENT_MODE=$present_mode ContentId=$STEAM_OFFER wrun run "$G/TF2VR/tools/crash_monitor.exe" "$(win "$G/TF2VR")" "$(win "$G/Titanfall2VRLauncher.exe")" \
     "${args[@]}" "$@" &
   local proton_pid=$!
 
