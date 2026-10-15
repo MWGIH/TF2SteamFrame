@@ -1,8 +1,11 @@
-# Titanfall 2 VR on the Steam Frame
+# Titanfall 2 VR on the Steam Frame and Steam Machine
 
-Play [CircuitLord's Titanfall 2 VR mod](https://github.com/CircuitLord/CircuitLordVRModInstaller) directly on a Steam Frame, with no PC to stream from.
+Play [CircuitLord's Titanfall 2 VR mod](https://github.com/CircuitLord/CircuitLordVRModInstaller) with a Steam Frame, in either of two ways:
 
-The official installer only runs on Windows, and [tf2vr-linux](https://github.com/Monkellie/tf2vr-linux) only runs on x86_64 Linux PCs that stream to the headset. This repo installs the same mod files, but starts the game through Steam itself, so Steam's own x86 emulation (FEX) and Proton on the Frame do the work.
+- **On the Steam Frame by itself**, with no PC to stream from. Steam's own x86 emulation (FEX) and Proton on the Frame run the game.
+- **On a Steam Machine, streaming to the Steam Frame** through SteamVR. The game runs natively on the Steam Machine, which is the smoother option. This also works on any x86_64 Linux PC with Steam.
+
+The install is the same one command on both. The official installer only runs on Windows, and [tf2vr-linux](https://github.com/Monkellie/tf2vr-linux) runs the game outside Steam, which doesn't work on the Frame. This repo installs the same mod files, but starts the game through Steam itself, so it works the same way on either device.
 
 - Your normal Titanfall 2 stays playable: add `-flat` to start it without VR.
 - Everything is downloaded from the official release links and checked against the official checksums. This repo contains no game or mod files.
@@ -10,7 +13,7 @@ The official installer only runs on Windows, and [tf2vr-linux](https://github.co
 
 > Made with AI assistance and a human in the loop; see [AI disclosure](#ai-disclosure).
 >
-> **Status: runs in VR on a Steam Frame; performance testing in progress.** Titanfall 2 VR starts and plays in full VR on a real Frame, but it is otherwise largely untested: it can be stuttery and soft-looking, and settings are still being worked out. See [What isn't known yet](#what-isnt-known-yet). For updates, keep an eye on the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam). Reports welcome.
+> **Status: runs in VR on a Steam Frame; performance testing in progress.** Titanfall 2 VR starts and plays in full VR on a real Frame. The Steam Machine route uses the same install but hasn't been tried on a Steam Machine yet. Both are otherwise largely untested: it can be stuttery and soft-looking, and settings are still being worked out. See [What isn't known yet](#what-isnt-known-yet). For updates, keep an eye on the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam). Reports welcome.
 
 ## Based on
 
@@ -23,13 +26,13 @@ This repo adapts two existing projects for the Steam Frame. All credit for the m
 | [polar421/Titanfall-2-VR-linux-fix](https://github.com/polar421/Titanfall-2-VR-linux-fix) by [polar421](https://github.com/polar421) | The first working Proton setup for the mod | The audio fix (sending the mod's loopback capture to the default playback device), applied here to the mod's DLL instead of to Proton |
 | [R2Northstar/Northstar](https://github.com/R2Northstar/Northstar) | The Titanfall 2 mod loader the VR mod runs on | Downloaded at the version CircuitLord's installer pins |
 
-## Install on the Steam Frame
+## Install
 
-Start the game once, run one command, then restart.
+The steps are the same on a Steam Frame and a Steam Machine: do them on the device that runs the game (the Frame by itself, or the Steam Machine you stream from). Start the game once, run one command, then restart.
 
 **1. Start Titanfall 2 once the normal way.** Install Titanfall 2 in Steam and press Play. Sign in to the EA app when it appears, wait for the game's main menu, then quit. This sets up the EA app and the game's Wine prefix, which VR reuses.
 
-**2. Open Konsole.** Switch to desktop mode from the power menu (as on the Steam Deck) and open **Konsole** from the application launcher. Any terminal on the Frame works, including SSH from another computer.
+**2. Open Konsole.** Switch to desktop mode from the power menu (as on the Steam Deck) and open **Konsole** from the application launcher. Any terminal works, including SSH from another computer.
 
 **3. Paste this command and press Enter:**
 
@@ -44,14 +47,14 @@ The command:
 - copies Microsoft's VC++ runtime into the game's prefix and applies the audio fix,
 - sets Titanfall 2's launch options for you during a restart, which it offers to do at the end.
 
-It never closes Steam: on the Frame, Steam is the device's interface, and closing it ends your session. Steam also overwrites its settings file whenever it saves, so launch options can't be written while it runs. Instead, the installer leaves a small one-time job that sets them during the next restart, in the moment Steam is closed: as the device shuts down after Steam has exited, or as it starts up before Steam does.
+It never closes Steam: on the Frame and the Steam Machine, Steam is the device's interface, and closing it ends your session. Steam also overwrites its settings file whenever it saves, so launch options can't be written while it runs. Instead, the installer leaves a small one-time job that sets them during the next restart, in the moment Steam is closed: as the device shuts down after Steam has exited, or as it starts up before Steam does.
 
-**4. Restart the Frame.** At the end, the installer asks `Restart now? [Y/n]`: press Enter and the Frame restarts. (If you said no, restart later from Steam menu → **Power** → **Restart**.) Titanfall 2's launch options are set during the restart; there's nothing to paste. You can check them afterwards in Titanfall 2 → gear icon → **Properties** → **General** → **Launch options**: they look like this, with your own home folder:
+**4. Restart.** At the end, the installer asks `Restart now? [Y/n]`: press Enter and the device restarts. (If you said no, restart later from Steam menu → **Power** → **Restart**.) Titanfall 2's launch options are set during the restart; there's nothing to paste. You can check them afterwards in Titanfall 2 → gear icon → **Properties** → **General** → **Launch options**: they look like this, with your own home folder:
 ```
 /home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch %command%
 ```
 
-**5. Play.** Put the headset on and press **Play** on Titanfall 2. The first launch builds the mod's game assets first, which takes a few minutes: a small window shows a progress bar with the percentage done, and the game starts by itself when it reaches 100%. After that, Play goes straight into VR.
+**5. Play.** On the Frame by itself: put the headset on and press **Play** on Titanfall 2. On a Steam Machine: see [Playing on a Steam Machine](#playing-on-a-steam-machine-streaming-to-the-frame). The first launch builds the mod's game assets first, which takes a few minutes: a small window shows a progress bar with the percentage done, and the game starts by itself when it reaches 100%. After that, Play goes straight into VR.
 
 Nothing needs installing with `pacman`, and SteamOS's read-only system isn't touched: everything goes into your home folder and the game folder. You need an internet connection and about 4 GB of free space: the first launch builds about 3 GB of game files.
 
@@ -82,11 +85,11 @@ echo vr   > ~/.config/tf2vr-frame/mode    # VR again
 
 Anything else you put after `%command%` is passed to the game, for example `+map sp_crashsite`.
 
-### On a Steam Machine or Linux PC, streaming to the Frame
+### Playing on a Steam Machine, streaming to the Frame
 
-The same install works on an x86_64 Steam Machine (or any Linux PC with Steam) that streams to the Frame through SteamVR, and nothing in it is Frame-specific: it finds Steam, the game and Proton the same way, and handles both ways Steam starts the game. There the game runs natively instead of through emulation, so it should run much more smoothly. This setup is untested so far.
+Nothing in the install is Frame-specific: on a Steam Machine (or any x86_64 Linux PC with Steam) it finds Steam, the game and Proton the same way. The game runs natively there instead of through emulation, so it should run much more smoothly. This route hasn't been tried on a Steam Machine yet.
 
-1. Do the install steps above on the Steam Machine (desktop mode, Konsole, the same command, then restart).
+1. Do the [install steps](#install) on the Steam Machine.
 2. Put the Frame on, connect it to the Steam Machine and let SteamVR start.
 3. Start Titanfall 2 from the Steam Machine's library while SteamVR is running. Steam doesn't start SteamVR for Titanfall 2 by itself, because it isn't a VR game on Steam; if SteamVR isn't running, `launch.log` says so.
 
@@ -177,7 +180,7 @@ Performance testing is in progress; follow the [Gaming on Steam YouTube channel]
 - **How Steam starts the game on the Frame** (confirmed on a Frame): Steam starts Titanfall 2 through the EA app's link (`proton waitforexitandrun steam2ea://launchgame/1237970?...`) rather than `Titanfall2.exe`. The wrapper puts the game folder's `Titanfall2.exe` in the link's place and carries on as usual.
 - **The EA app on the Frame.** It has to install and sign in through Steam's normal first launch, as on any Linux device.
 
-The same approach also works on x86 SteamOS (Steam Deck, Steam Machine) and desktop Linux with Steam; see [On a Steam Machine or Linux PC](#on-a-steam-machine-or-linux-pc-streaming-to-the-frame).
+The same approach also works on x86 SteamOS (Steam Deck, Steam Machine) and desktop Linux with Steam; see [Playing on a Steam Machine](#playing-on-a-steam-machine-streaming-to-the-frame).
 
 ## Tests
 
