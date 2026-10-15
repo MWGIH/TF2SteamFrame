@@ -82,6 +82,14 @@ echo vr   > ~/.config/tf2vr-frame/mode    # VR again
 
 Anything else you put after `%command%` is passed to the game, for example `+map sp_crashsite`.
 
+### On a Steam Machine or Linux PC, streaming to the Frame
+
+The same install works on an x86_64 Steam Machine (or any Linux PC with Steam) that streams to the Frame through SteamVR, and nothing in it is Frame-specific: it finds Steam, the game and Proton the same way, and handles both ways Steam starts the game. There the game runs natively instead of through emulation, so it should run much more smoothly. This setup is untested so far.
+
+1. Do the install steps above on the Steam Machine (desktop mode, Konsole, the same command, then restart).
+2. Put the Frame on, connect it to the Steam Machine and let SteamVR start.
+3. Start Titanfall 2 from the Steam Machine's library while SteamVR is running. Steam doesn't start SteamVR for Titanfall 2 by itself, because it isn't a VR game on Steam; if SteamVR isn't running, `launch.log` says so.
+
 For mod settings, controls and help with the mod itself, see [CircuitLord's Discord](https://discord.gg/MTKwud2cCP).
 
 ## Update
@@ -169,7 +177,7 @@ Performance testing is in progress; follow the [Gaming on Steam YouTube channel]
 - **How Steam starts the game on the Frame** (confirmed on a Frame): Steam starts Titanfall 2 through the EA app's link (`proton waitforexitandrun steam2ea://launchgame/1237970?...`) rather than `Titanfall2.exe`. The wrapper puts the game folder's `Titanfall2.exe` in the link's place and carries on as usual.
 - **The EA app on the Frame.** It has to install and sign in through Steam's normal first launch, as on any Linux device.
 
-The same approach also works on x86 SteamOS (Steam Deck) and desktop Linux with Steam, which is a good way to test changes without a Frame.
+The same approach also works on x86 SteamOS (Steam Deck, Steam Machine) and desktop Linux with Steam; see [On a Steam Machine or Linux PC](#on-a-steam-machine-or-linux-pc-streaming-to-the-frame).
 
 ## Tests
 
