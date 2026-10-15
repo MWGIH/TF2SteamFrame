@@ -286,6 +286,11 @@ inner_vr() {
     case "$v" in TF2VR_*) unset "$v" ;; esac
   done < <(compgen -e)
   export TF2VR_OPENXR=1
+  # `install.sh --timing on` turns on the mod's own frame timing logs (frames.csv and friends)
+  if [ -f "$CONF_DIR/timing" ]; then
+    export TF2VR_TIMING=1
+    log "Frame timing logs are on (install.sh --timing off to stop them)."
+  fi
   # VR needs DXVK: wineopenxr hands the game's D3D11 frames to the headset as DXVK textures.
   for v in PROTON_USE_WINED3D PROTON_USE_WINED3D11; do
     if [ -n "${!v:-}" ] && [ "${!v}" != 0 ]; then

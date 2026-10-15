@@ -150,6 +150,26 @@ LOCALCONFIG = (
 WRAPPER = "/home/steamos/.local/share/tf2vr-frame/tf2vr-frame-launch"
 
 
+class TimingSummary(unittest.TestCase):
+    def test_ms_columns(self):
+        import contextlib, io
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "frames.csv")
+            with open(path, "w") as f:
+                f.write("render_sequence,period_ms,submit_ms,left_tracked\n")
+                for i in range(1, 101):
+                    f.write(f"{i},{i},2.5,1\n")
+                f.write("101,,bad,1\n")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(t.cmd_timing_summary([path]), 0)
+        text = out.getvalue()
+        self.assertIn("frames.csv: 101 rows", text)
+        self.assertRegex(text, r"period_ms +median +51\.00 +95% +96\.00 +max +100\.00 +\(100 values\)")
+        self.assertRegex(text, r"submit_ms +median +2\.50")
+        self.assertNotIn("left_tracked", text)
+
+
 class LaunchOptions(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

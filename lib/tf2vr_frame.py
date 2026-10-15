@@ -16,11 +16,13 @@ Steam Frame (ARM64 SteamOS), on x86 SteamOS and inside Steam's container runtime
     tf2vr_frame.py set-launch-options STEAM WRAPPER    put the wrapper in Titanfall 2's launch options
     tf2vr_frame.py clear-launch-options STEAM WRAPPER  take it out again
     tf2vr_frame.py check-launch-options STEAM WRAPPER  exit 0 if it's already in for every account
+    tf2vr_frame.py timing-summary CSV...         median / 95th percentile / max of each *_ms column
 """
 import hashlib
 import json
 import os
 import re
+import csv
 import shlex
 import struct
 import sys
@@ -597,6 +599,32 @@ def cmd_extract(args):
     return 0
 
 
+def cmd_timing_summary(args):
+    """Summarise the mod's TF2VR_TIMING logs: one line per *_ms column."""
+    for path in args:
+        try:
+            with open(path, newline="", errors="replace") as f:
+                rows = list(csv.DictReader(f))
+        except OSError as e:
+            print(f"{path}: {e.strerror}")
+            continue
+        print(f"{os.path.basename(path)}: {len(rows)} rows")
+        columns = [c for c in (rows[0].keys() if rows else []) if c and c.endswith("_ms")]
+        for column in columns:
+            values = []
+            for row in rows:
+                try:
+                    values.append(float(row[column]))
+                except (TypeError, ValueError):
+                    pass
+            if not values:
+                continue
+            values.sort()
+            pick = lambda q: values[min(len(values) - 1, int(q * len(values)))]
+            print(f"  {column:<16} median {pick(0.5):8.2f}   95% {pick(0.95):8.2f}   max {values[-1]:8.2f}   ({len(values)} values)")
+    return 0
+
+
 COMMANDS = {
     "find-game": cmd_find_game,
     "has-steamvr": cmd_has_steamvr,
@@ -610,6 +638,7 @@ COMMANDS = {
     "set-launch-options": cmd_set_launch_options,
     "clear-launch-options": cmd_clear_launch_options,
     "check-launch-options": cmd_check_launch_options,
+    "timing-summary": cmd_timing_summary,
 }
 
 
