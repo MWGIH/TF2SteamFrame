@@ -4,6 +4,7 @@ Play [CircuitLord's Titanfall 2 VR mod](https://github.com/CircuitLord/CircuitLo
 
 - **On the Steam Frame by itself**, with no PC to stream from. Steam's own x86 emulation (FEX) and Proton on the Frame run the game.
 - **On a Steam Machine, streaming to the Steam Frame** through SteamVR. The game runs natively on the Steam Machine, which is the smoother option. This also works on any x86_64 Linux PC with Steam.
+- **On a Steam Machine, streaming to another headset with Steam Link**, such as a Meta Quest 3. The game runs on the Steam Machine the same way; only the headset differs.
 
 The install is the same one command on both. The official installer only runs on Windows, and [tf2vr-linux](https://github.com/Monkellie/tf2vr-linux) runs the game outside Steam, which doesn't work on the Frame. This repo installs the same mod files, but starts the game through Steam itself, so it works the same way on either device.
 
@@ -13,7 +14,7 @@ The install is the same one command on both. The official installer only runs on
 
 > Made with AI assistance and a human in the loop; see [AI disclosure](#ai-disclosure).
 >
-> **Status: runs in VR on a Steam Frame; performance testing in progress.** Titanfall 2 VR starts and plays in full VR on a real Frame. It also runs in VR on a Steam Machine streaming to the Frame, as long as you start it from inside SteamVR (see [Playing on a Steam Machine](#playing-on-a-steam-machine-streaming-to-the-frame)). Both are otherwise largely untested: it can be stuttery and soft-looking, and settings are still being worked out. See [What isn't known yet](#what-isnt-known-yet). For updates, keep an eye on the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam). Reports welcome.
+> **Status: runs in VR on a Steam Frame; performance testing in progress.** Titanfall 2 VR starts and plays in full VR on a real Frame. It also runs in VR on a Steam Machine streaming to the Frame, or to a Meta Quest 3 with Steam Link, as long as you start it from inside VR (see [Playing on a Steam Machine](#playing-on-a-steam-machine-streaming-to-the-frame)). Both are otherwise largely untested: it can be stuttery and soft-looking, and settings are still being worked out. See [What isn't known yet](#what-isnt-known-yet). For updates, keep an eye on the [Gaming on Steam YouTube channel](https://youtube.com/@gaming_onsteam). Reports welcome.
 
 ## Based on
 
@@ -101,6 +102,14 @@ The order matters. Don't start Titanfall 2 from the Steam Machine's own screen, 
 If the EA app ever asks you to sign in, its window appears on the Steam Machine's own screen. Sign in there once and it remembers you.
 
 If you use a Decky Loader plugin that changes games' launch options, make sure it doesn't replace Titanfall 2's. They must start with the `tf2vr-frame-launch` command the installer sets, or the mod won't start.
+
+### Other headsets with Steam Link
+
+The same Steam Machine install also streams to headsets that run the Steam Link app. This has been confirmed working with a Meta Quest 3. Other Steam Link headsets, such as the Pico 4 Ultra, should work the same way but haven't been tried yet.
+
+1. Do steps 1 and 2 above on the Steam Machine.
+2. Put the headset on and connect to the Steam Machine with the Steam Link app. SteamVR starts on the Steam Machine.
+3. In VR, open the Steam interface, select Titanfall 2 and press Play. Don't look for it in SteamVR's own library: Steam doesn't list Titanfall 2 there, because it isn't a VR game on Steam.
 
 For mod settings, controls and help with the mod itself, see [CircuitLord's Discord](https://discord.gg/MTKwud2cCP).
 
