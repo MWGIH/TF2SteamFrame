@@ -461,7 +461,7 @@ outer() {
 
   # Steam doesn't start SteamVR for Titanfall 2 (it isn't a VR game in Steam's eyes). On a PC or
   # Steam Machine streaming to a headset, SteamVR has to be running already, or the mod can't reach it.
-  steamvr_running || log "WARNING: SteamVR isn't running. On a PC or Steam Machine, connect the headset and start SteamVR before pressing Play."
+  steamvr_running || log "WARNING: SteamVR isn't running. On a PC or Steam Machine, start SteamVR from the headset first, then start Titanfall 2 from inside VR."
   exec "${pre[@]}" "$SELF" --inner vr "${#runner[@]}" "${runner[@]}" "$exe" "${tail_args[@]}"
 }
 
