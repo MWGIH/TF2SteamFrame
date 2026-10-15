@@ -30,6 +30,8 @@ This repo adapts two existing projects for the Steam Frame. All credit for the m
 
 The steps are the same on a Steam Frame and a Steam Machine: do them on the device that runs the game (the Frame by itself, or the Steam Machine you stream from). Start the game once, run one command, then restart.
 
+**0. Steam Machine only: install SteamVR.** SteamVR isn't installed on a Steam Machine by default, and it's what streams the game to the Frame. Search for **SteamVR** in the Steam Store and install it (it's free). Start it once with the Frame connected so it finishes setting up. Skip this step on the Frame by itself: VR is built in there. The installer warns you if SteamVR is missing on a Steam Machine.
+
 **1. Start Titanfall 2 once the normal way.** Install Titanfall 2 in Steam and press Play. Sign in to the EA app when it appears, wait for the game's main menu, then quit. This sets up the EA app and the game's Wine prefix, which VR reuses.
 
 **2. Open Konsole.** Switch to desktop mode from the power menu (as on the Steam Deck) and open **Konsole** from the application launcher. Any terminal works, including SSH from another computer.
@@ -89,9 +91,10 @@ Anything else you put after `%command%` is passed to the game, for example `+map
 
 Nothing in the install is Frame-specific: on a Steam Machine (or any x86_64 Linux PC with Steam) it finds Steam, the game and Proton the same way. The game runs natively there instead of through emulation, so it should run much more smoothly. This route hasn't been tried on a Steam Machine yet.
 
-1. Do the [install steps](#install) on the Steam Machine.
-2. Put the Frame on, connect it to the Steam Machine and let SteamVR start.
-3. Start Titanfall 2 from the Steam Machine's library while SteamVR is running. Steam doesn't start SteamVR for Titanfall 2 by itself, because it isn't a VR game on Steam; if SteamVR isn't running, `launch.log` says so.
+1. Install SteamVR from the Steam Store, if you haven't yet. It isn't installed by default.
+2. Do the [install steps](#install) on the Steam Machine.
+3. Put the Frame on, connect it to the Steam Machine and let SteamVR start.
+4. Start Titanfall 2 from the Steam Machine's library while SteamVR is running. Steam doesn't start SteamVR for Titanfall 2 by itself, because it isn't a VR game on Steam; if SteamVR isn't running, `launch.log` says so.
 
 For mod settings, controls and help with the mod itself, see [CircuitLord's Discord](https://discord.gg/MTKwud2cCP).
 

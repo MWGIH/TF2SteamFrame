@@ -131,6 +131,11 @@ class SteamDiscovery(unittest.TestCase):
         os.remove(os.path.join(self.sd, "steamapps/common/titanfall2/Titanfall2.exe"))
         self.assertEqual(t.find_game(self.steam), (None, None))
 
+    def test_steamvr_installed(self):
+        self.assertFalse(t.app_installed(self.steam, t.STEAMVR_APPID))
+        open(os.path.join(self.sd, "steamapps/appmanifest_250820.acf"), "w").close()
+        self.assertTrue(t.app_installed(self.steam, t.STEAMVR_APPID))
+
     def test_vdf_escapes(self):
         parsed = t.parse_vdf('"a"\n{\n\t"path"\t\t"D:\\\\Games\\\\Steam"\n}\n')
         self.assertEqual(parsed["a"]["path"], "D:\\Games\\Steam")

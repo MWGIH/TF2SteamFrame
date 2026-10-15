@@ -5,6 +5,7 @@ Everything here is plain Python 3 with no third-party modules, so it runs native
 Steam Frame (ARM64 SteamOS), on x86 SteamOS and inside Steam's container runtime.
 
     tf2vr_frame.py find-game [STEAM_DIR...]      print STEAM, GAME, PREFIX lines (shell-quoted)
+    tf2vr_frame.py has-steamvr STEAM             exit 0 if SteamVR is installed in any Steam library
     tf2vr_frame.py patch-loopback DLL            retarget the mod's process-loopback capture
     tf2vr_frame.py check-loopback DLL            print patched / unpatched / unknown
     tf2vr_frame.py verify-assets MANIFEST DIR    check asset_patcher.exe's output
@@ -97,6 +98,19 @@ def libraries(steam):
         elif isinstance(entry, str) and entry.startswith("/"):
             add(entry)  # very old format: "1" "/path"
     return seen
+
+
+STEAMVR_APPID = "250820"
+
+
+def app_installed(steam, appid):
+    """True if any Steam library has app APPID installed (it has an appmanifest there)."""
+    return any(os.path.isfile(os.path.join(lib, "steamapps", "appmanifest_%s.acf" % appid))
+               for lib in libraries(steam))
+
+
+def cmd_has_steamvr(args):
+    return 0 if app_installed(args[0], STEAMVR_APPID) else 1
 
 
 def find_game(steam):
@@ -585,6 +599,7 @@ def cmd_extract(args):
 
 COMMANDS = {
     "find-game": cmd_find_game,
+    "has-steamvr": cmd_has_steamvr,
     "check-loopback": cmd_check_loopback,
     "patch-loopback": cmd_patch_loopback,
     "verify-assets": cmd_verify_assets,
