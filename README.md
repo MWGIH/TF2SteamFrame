@@ -75,6 +75,7 @@ Add these after `bash -s --` in the command above, or pass them to `~/TF2SteamFr
 | `--no-launch-options` | Don't set the launch options; paste them yourself |
 | `--restart` | Restart at the end without asking, when that's needed to set the launch options |
 | `--game DIR` | Use this Titanfall 2 folder, if it isn't found |
+| `--timing on` / `--timing off` | Have the mod log how long each VR frame takes; `--diagnose` then summarises it |
 
 ## Play
 

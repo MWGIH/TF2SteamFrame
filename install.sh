@@ -11,6 +11,7 @@
 #   ./install.sh --restart     restart the device at the end without asking, if that's needed to
 #                              set the launch options
 #   ./install.sh --diagnose    print what's needed to debug the launch options (also saved to a file)
+#   ./install.sh --timing on|off   have the mod log how long each VR frame takes (for --diagnose)
 #
 # Steam is never closed (on the Frame it is the device's shell). Steam rewrites its settings while
 # it runs, so when it's running the launch options are set during the next restart, which the
@@ -46,6 +47,7 @@ CHANNEL=stable
 OPT_GAME=""
 LAUNCH_OPTIONS=1
 RESTART=0
+TIMING=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --check)     MODE=check ;;
@@ -57,6 +59,10 @@ while [ $# -gt 0 ]; do
     --yes|-y)    ;;  # older versions closed Steam after asking; nothing to confirm any more
     --no-launch-options) LAUNCH_OPTIONS=0 ;;
     --restart)   RESTART=1 ;;
+    --timing)
+      case "${2:-}" in on|off) TIMING=$2 ;; *) echo "install.sh: --timing needs on or off" >&2; exit 2 ;; esac
+      MODE=timing
+      shift ;;
     --game)
       [ $# -ge 2 ] && [ -d "$2" ] || { echo "install.sh: --game needs the folder with Titanfall2.exe" >&2; exit 2; }
       OPT_GAME=$(readlink -f "$2")
@@ -581,6 +587,12 @@ PY2
     newest=$(ls -1td "$GAME"/TF2VR/crashes/*/ 2>/dev/null | head -n 1)
     echo "newest crash folder: ${newest:-(none)}"
     [ -n "$newest" ] && tail -n 20 "$newest/monitor.txt" 2>/dev/null
+    echo "frame timing: $([ -f "$CONF_DIR/timing" ] && echo on || echo "off (turn on with: install.sh --timing on)")"
+    newest=$(find "$GAME" -maxdepth 6 -name frames.csv -printf '%T@ %h\n' 2>/dev/null | sort -rn | head -n 1 | cut -d' ' -f2-)
+    if [ -n "$newest" ]; then
+      echo "newest timing logs: $newest ($(stat -c %y "$newest/frames.csv"))"
+      python3 "$HERE/lib/tf2vr_frame.py" timing-summary "$newest"/*.csv 2>&1 | grep -v ': 0 rows$' | head -n 80
+    fi
   fi
   echo "VR environment Steam gave the game (last launch):"
   grep 'VR environment:' "$LOG_DIR/launch.log" 2>/dev/null | tail -n 1
@@ -596,6 +608,18 @@ PY2
     echo "SteamVR $(basename "$vrlog") (last 30 lines):"; tail -n 30 "$vrlog" | cut -c1-500
   done < <(ls -1t "${STEAM:-/nonexistent}"/logs/vrclient_*.txt 2>/dev/null | head -n 2)
 }
+
+if [ "$MODE" = timing ]; then
+  mkdir -p "$CONF_DIR"
+  if [ "$TIMING" = on ]; then
+    touch "$CONF_DIR/timing"
+    echo "Frame timing logs are on. Play for a few minutes, quit, then run: $0 --diagnose"
+  else
+    rm -f "$CONF_DIR/timing"
+    echo "Frame timing logs are off."
+  fi
+  exit 0
+fi
 
 if [ "$MODE" = diagnose ]; then
   discover
