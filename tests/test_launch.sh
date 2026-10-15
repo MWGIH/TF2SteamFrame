@@ -36,7 +36,7 @@ cat > "$PROTON_DIR/proton" <<EOF
 #!/usr/bin/env bash
 # fake Proton: log the call, then imitate the program
 printf '%s' "\$1" >> "$CALLS"; shift
-printf ' |%s' "\$@" >> "$CALLS"; printf ' ContentId=%s TF2VR_OPENXR=%s\n' "\${ContentId:-}" "\${TF2VR_OPENXR:-}" >> "$CALLS"
+printf ' |%s' "\$@" >> "$CALLS"; printf ' ContentId=%s TF2VR_OPENXR=%s DXVK_CONFIG=%s PRESENT=%s\n' "\${ContentId:-}" "\${TF2VR_OPENXR:-}" "\${DXVK_CONFIG:-}" "\${MESA_VK_WSI_PRESENT_MODE:-}" >> "$CALLS"
 case "\$1" in
   *EADesktop.exe)
     mkdir -p "\$STEAM_COMPAT_DATA_PATH/pfx/drive_c/ProgramData/EA Desktop/Logs"
@@ -108,7 +108,7 @@ ok "first launch builds the assets inside Steam's runtime and installs the mod"
 grep -q '^run |C:\\Program Files\\Electronic Arts\\EA Desktop\\EA Desktop\\EADesktop.exe' "$CALLS" || fail "EA app started"
 line=$(grep 'crash_monitor.exe' "$CALLS") || fail "crash_monitor.exe started"
 case "$line" in
-  "run |$GAME/TF2VR/tools/crash_monitor.exe |Z:"*"\\TF2VR |Z:"*"\\Titanfall2VRLauncher.exe |-profile=TF2VR |-w |1280 |+fps_max |0 |+map |sp_crashsite ContentId=Origin.OFR.50.0001456 TF2VR_OPENXR=1") ;;
+  "run |$GAME/TF2VR/tools/crash_monitor.exe |Z:"*"\\TF2VR |Z:"*"\\Titanfall2VRLauncher.exe |-profile=TF2VR |-w |1280 |+fps_max |0 |+map |sp_crashsite ContentId=Origin.OFR.50.0001456 TF2VR_OPENXR=1 DXVK_CONFIG=dxgi.syncInterval = 0 PRESENT=immediate") ;;
   *) fail "crash_monitor.exe arguments: $line" ;;
 esac
 ok "VR launch: EA app, then crash_monitor.exe -> Titanfall2VRLauncher.exe with launch.json args and Steam's extra args"
