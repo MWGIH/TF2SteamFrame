@@ -584,6 +584,17 @@ PY2
   fi
   echo "VR environment Steam gave the game (last launch):"
   grep 'VR environment:' "$LOG_DIR/launch.log" 2>/dev/null | tail -n 1
+  # SteamVR (Steam Machine / PC streaming to the headset)
+  local rt="${XDG_CONFIG_HOME:-$HOME/.config}/openxr/1/active_runtime.json" vrlog
+  echo "OpenXR runtime: $(readlink -f "$rt" 2>/dev/null || echo none)"
+  echo "SteamVR processes:"; pgrep -a -x 'vrserver|vrcompositor|vrmonitor|vrstartup|vrwebhelper' 2>/dev/null | cut -c1-200
+  for vrlog in vrserver vrcompositor vrmonitor vrstartup; do
+    vrlog="${STEAM:-/nonexistent}/logs/$vrlog.txt"
+    [ -f "$vrlog" ] && { echo "SteamVR $(basename "$vrlog") (last 50 lines):"; tail -n 50 "$vrlog" | cut -c1-500; }
+  done
+  while IFS= read -r vrlog; do
+    echo "SteamVR $(basename "$vrlog") (last 30 lines):"; tail -n 30 "$vrlog" | cut -c1-500
+  done < <(ls -1t "${STEAM:-/nonexistent}"/logs/vrclient_*.txt 2>/dev/null | head -n 2)
 }
 
 if [ "$MODE" = diagnose ]; then
