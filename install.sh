@@ -600,6 +600,12 @@ PY2
   local rt="${XDG_CONFIG_HOME:-$HOME/.config}/openxr/1/active_runtime.json" vrlog
   echo "OpenXR runtime: $(readlink -f "$rt" 2>/dev/null || echo none)"
   echo "SteamVR processes:"; pgrep -a -x 'vrserver|vrcompositor|vrmonitor|vrstartup|vrwebhelper' 2>/dev/null | cut -c1-200
+  # Streaming dropouts: the vrlink driver logs its connection, bitrate and packet-loss events
+  vrlog="${STEAM:-/nonexistent}/logs/vrserver.txt"
+  if [ -f "$vrlog" ]; then
+    echo "SteamVR streaming events (vrlink, last 80):"
+    grep -iE 'vrlink.*(disconnect|connect|lost|timeout|bitrate|bandwidth|packet|loss|latency|reconnect|network|encode|drop)' "$vrlog" | tail -n 80 | cut -c1-300
+  fi
   for vrlog in vrserver vrcompositor vrmonitor vrstartup; do
     vrlog="${STEAM:-/nonexistent}/logs/$vrlog.txt"
     [ -f "$vrlog" ] && { echo "SteamVR $(basename "$vrlog") (last 50 lines):"; tail -n 50 "$vrlog" | cut -c1-500; }
