@@ -69,6 +69,22 @@ inner() {
 }
 
 # wrun <run|waitforexitandrun> <windows exe> [args...]: start a Windows program in the game's Wine prefix
+# Which Proton and DXVK this launch uses. DXVK v3.1.1-60 to -67 (Proton Experimental and Hotfix
+# from about 5 to 13 October 2026) can finish a frame before the game has submitted the right eye,
+# so the headset shows the right eye a frame late (found by tf2vr-linux, Monkellie/tf2vr-linux#4).
+proton_report() {
+  [ -n "$PROTON" ] || return 0
+  local dir vfile dxvk
+  dir=$(dirname "$PROTON")
+  vfile="$dir/files/lib/wine/dxvk/version"
+  [ -f "$vfile" ] || vfile=$(find "$dir" -maxdepth 6 -path '*/dxvk/version' -type f 2>/dev/null | head -n 1)
+  dxvk=$(sed -n 's/.*dxvk (\(.*\))$/\1/p' "${vfile:-/nonexistent}" 2>/dev/null | head -n 1)
+  log "Proton: $dir ($(awk '{ print $NF }' "$dir/version" 2>/dev/null)), DXVK ${dxvk:-unknown}"
+  if [[ $dxvk =~ ^v3\.1\.1-([0-9]+)-g ]] && [ "${BASH_REMATCH[1]}" -ge 60 ] && [ "${BASH_REMATCH[1]}" -le 67 ]; then
+    log "WARNING: this DXVK shows the right eye a frame late. Update Proton in Steam (Proton Experimental updates by itself; check Downloads) or pick another Proton for Titanfall 2."
+  fi
+}
+
 wrun() {
   local verb=$1
   shift
@@ -300,6 +316,7 @@ inner_vr() {
   done
 
   log "VR environment: $(env | grep -E '^(XR_|VR_|OPENXR|PROTON_|STEAM_COMPAT_TOOL_PATHS|SteamAppId)' | sort | tr '\n' ' ')"
+  proton_report
   kill_orphans && log "Closed Wine processes left over from an earlier session."
 
   # Northstar needs a signed-in EA app; start it first so the launcher doesn't hang at "LSX: connect()".

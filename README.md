@@ -154,6 +154,7 @@ The launcher writes what it does to `~/.local/state/tf2vr-frame/launch.log`, and
 | The game says you're logged out of Origin, then quits | If the EA app's window asks you to sign in, do. Start the flat game once to check the EA app is signed in. |
 | Crash with code `0xC0000409` (3221226505) | The audio fix isn't in place: run `./install.sh --force`. |
 | Crash in `MSVCP140.dll` right after the mod loads | Run `./install.sh` again. |
+| The right eye lags a frame behind the left when you turn your head | Check `launch.log` for `this DXVK shows the right eye a frame late`. Proton Experimental and Hotfix from about 5 to 13 October 2026 carried a DXVK with this bug ([found by tf2vr-linux](https://github.com/Monkellie/tf2vr-linux/issues/4)). Let Steam update Proton (it does this by itself; check Downloads), or pick another Proton for Titanfall 2. |
 | `Another mod replaced DirectX files` | Remove `dxgi.dll` and `d3d11.dll` (ReShade and similar) from the game folder. |
 
 Logs worth attaching to an issue, collected after the game has closed:
