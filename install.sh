@@ -596,6 +596,8 @@ PY2
   fi
   echo "VR environment Steam gave the game (last launch):"
   grep 'VR environment:' "$LOG_DIR/launch.log" 2>/dev/null | tail -n 1
+  echo "Proton and DXVK (last launch):"
+  grep -E 'Proton: |right eye a frame late' "$LOG_DIR/launch.log" 2>/dev/null | tail -n 2
   # SteamVR (Steam Machine / PC streaming to the headset)
   local rt="${XDG_CONFIG_HOME:-$HOME/.config}/openxr/1/active_runtime.json" vrlog
   echo "OpenXR runtime: $(readlink -f "$rt" 2>/dev/null || echo none)"
